@@ -1,5 +1,7 @@
+#!/bin/env python3
+# /etc/httpd/conf/ozavala_custom_wsgi.conf
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import Input, Output, State
 import dash_bootstrap_components as dbc
 import numpy as np
 import xarray as xr
@@ -9,13 +11,13 @@ from viz_utils.styles import NespresoStyles
 from viz_utils.update_trans import Transects
 from viz_utils.update_main import MainFigures
 from datetime import datetime
-import time
 
 # %% Make a basic dash interface to explore a NetCDF file
-import plotly.graph_objs as go
 
 # Load your NetCDF data
-file_name = '/data/SubsurfaceFields/NeSPReSO_20240101_to_20240131.nc'
+file_name = '/var/www/virtualhosts/ozavala.coaps.fsu.edu/nespreso_viz/data/NeSPReSO_20230801_to_20230910.nc'
+# file_name = 'data/NeSPReSO_20230801_to_20230910.nc'
+
 ds = xr.open_dataset(file_name)
 dates = ds['time'].values
 
@@ -32,7 +34,9 @@ transect_loc = [[24, -90], [24, -92]]
 
 # Create Dash app
 # app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, 
+                requests_pathname_prefix='/nespreso_viz/',
+                external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
 # Create layout with three rows and specified figures
@@ -70,7 +74,6 @@ def update_calendar_store(selected_date):
 )
 def update_profiles_loc(n_clicks, clickData_aviso, clickData_temp, clickData_sal, prof_loc):
     # Placeholder function to generate figures. Customize according to your data.
-    # Using go.Heatmap plot aviso
 
     ctx = dash.callback_context
     if not ctx.triggered:
@@ -220,7 +223,7 @@ def update_trans(date_idx, cur_transect, depth_type, cur_date_str):
 
 if __name__ == '__main__':
     # Debug mode
-   app.run_server(debug=True)
+   app.run_server(debug=False)
 
     # Production mode at ip 144.174.7.151
     # app.run_server(debug=False, host='144.174.7.151', port=8050)
