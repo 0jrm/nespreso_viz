@@ -3,11 +3,19 @@ import plotly.graph_objs as go
 
 class Profiles:
     def __init__(self, data, styles):
-        self.temp = data.variables['Temperature'][:]
-        self.sal = data.variables['Salinity'][:]
-        self.lats = data.variables['lat'][:]
-        self.lons = data.variables['lon'][:]
-        self.depths = data.variables['depth'][:]  # Add this line
+        # Normalize to numpy with leading time axis
+        temp = data['Temperature'].values
+        sal = data['Salinity'].values
+        if temp.ndim == 3:
+            temp = temp[np.newaxis, ...]
+        if sal.ndim == 3:
+            sal = sal[np.newaxis, ...]
+        self.temp = temp
+        self.sal = sal
+
+        self.lats = data['lat'].values
+        self.lons = data['lon'].values
+        self.depths = data['depth'].values  # Add this line
         self.styles = styles# Add this line
 
     def update_profiles(self, prof_loc, date_idx, depth_type, cur_date_str, main_depth_idx):
@@ -36,8 +44,8 @@ class Profiles:
                 lat = loc[0]
                 lon = loc[1]
                 loc_names.append(f'{round(lat,2)},{round(lon,2)}')
-                lat_idx = np.argmin(np.abs(self.lats.values - lat))  # Use self.lats
-                lon_idx = np.argmin(np.abs(self.lons.values - lon))  # Use self.lons
+                lat_idx = np.argmin(np.abs(self.lats - lat))  # Use self.lats (numpy array)
+                lon_idx = np.argmin(np.abs(self.lons - lon))  # Use self.lons (numpy array)
                 temp_profiles.append(self.temp[date_idx, depth_idx, lat_idx, lon_idx])  # Use self.temp
                 salinity_profiles.append(self.sal[date_idx, depth_idx, lat_idx, lon_idx])  # Use self.sal
             # --------------- Temp profile -------------------

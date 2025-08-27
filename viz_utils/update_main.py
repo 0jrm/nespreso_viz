@@ -7,19 +7,48 @@ from viz_utils.styles import NespresoStyles
 
 class MainFigures:
     def __init__(self, data: xr.Dataset, styles: NespresoStyles):
-        self.SSS = data.variables['SSS'][:]
-        self.SST = data.variables['SST'][:]
-        self.temp = data.variables['Temperature'][:]
-        self.sal = data.variables['Salinity'][:]
-        self.temp_err = data.variables['T_error'][:]
-        self.sal_err = data.variables['S_error'][:]
-        self.aviso = data.variables['AVISO'][:]
-        self.mld = data.variables['MLD'][:]
-        self.ohc = data.variables['OHC'][:]
-        self.iso = data.variables['Isotherm'][:]
-        self.lats = data.variables['lat'][:]
-        self.lons = data.variables['lon'][:]
-        self.depths = data.variables['depth'][:]  # Add this line
+        # Always normalize to numpy arrays with a leading time axis (size 1 if single-date)
+        sss = data['SSS'].values
+        sst = data['SST'].values
+        aviso = data['AVISO'].values
+        temp = data['Temperature'].values
+        sal = data['Salinity'].values
+
+        if sss.ndim == 2:
+            sss = sss[np.newaxis, ...]
+        if sst.ndim == 2:
+            sst = sst[np.newaxis, ...]
+        if aviso.ndim == 2:
+            aviso = aviso[np.newaxis, ...]
+        if temp.ndim == 3:
+            temp = temp[np.newaxis, ...]
+        if sal.ndim == 3:
+            sal = sal[np.newaxis, ...]
+
+        self.SSS = sss
+        self.SST = sst
+        self.aviso = aviso
+        self.temp = temp
+        self.sal = sal
+        
+        # Handle missing variables - create placeholders or remove references
+        if 'T_error' in data.variables:
+            terr = data['T_error'].values
+            self.temp_err = terr if terr.ndim == 4 else terr[np.newaxis, ...]
+        else:
+            self.temp_err = np.zeros_like(self.temp)
+            
+        if 'S_error' in data.variables:
+            serr = data['S_error'].values
+            self.sal_err = serr if serr.ndim == 4 else serr[np.newaxis, ...]
+        else:
+            self.sal_err = np.zeros_like(self.sal)
+            
+        # MLD/OHC/Isotherm removed per latest dataset capabilities
+            
+        self.lats = data['lat'].values
+        self.lons = data['lon'].values
+        self.depths = data['depth'].values  # Add this line
         self.styles = styles
 
         # Calculate pressure for first 200 mts
@@ -120,26 +149,24 @@ class MainFigures:
             )
 
         # -------------------------- Temp -------------------------------
+        # depth_idx may exceed range; coerce safely
+        depth_idx = int(depth_idx) if isinstance(depth_idx, (int, np.integer)) else 0
+        if depth_idx < 0:
+            depth_idx = 0
+        if depth_idx >= self.depths.shape[0]:
+            depth_idx = self.depths.shape[0] - 1
         fig_temp = self.make_figure(np.round(self.temp[date_idx,depth_idx,:,:], 2), prof_locations, cm.thermal, 
                                      f"Temperature (Synthetic), {depth_idx} m, {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Temp: %{z:.1f} °C<extra></extra>')
         # -------------------------- Sal -------------------------------
         fig_sal = self.make_figure(self.sal[date_idx,depth_idx,:,:], prof_locations, cm.haline, 
                                      f"Salinity (Synthetic),{depth_idx} m, {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Salt: %{z:.1f} PSU<extra></extra>')
-        # -------------------------- MLD -------------------------------
-        fig_MLD = self.make_figure(self.mld[date_idx,:,:], prof_locations, cm.deep, 
-                                     f"MLD (Synthetic), {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>MLD: %{z:.1f} m<extra></extra>')
         # -------------------------- Temp Error -------------------------------
         # fig_temp_err = self.make_figure(np.round(self.temp_err[date_idx,depth_idx,:,:], 2), prof_locations, cm.thermal, 
                                     #  f"Temperature Error (Synthetic), {depth_idx} m, {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Temp Error: %{z:.1f} °C<extra></extra>')
         # -------------------------- Sal Error -------------------------------
         # fig_sal_err = self.make_figure(self.sal_err[date_idx,depth_idx,:,:], prof_locations, cm.haline, 
                                     #  f"Salinity Error (Synthetic),{depth_idx} m, {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Salt Error: %{z:.1f} PSU<extra></extra>')
-        # -------------------------- OHC -------------------------------
-        fig_ohc = self.make_figure(self.ohc[date_idx,:,:], prof_locations, cm.thermal, 
-                                     f"Ocean Heat Content (Synthetic), {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>OHC: %{z:.1f} J/m^2<extra></extra>')
-        # -------------------------- Iso -------------------------------
-        fig_iso = self.make_figure(self.iso[date_idx,:,:], prof_locations, cm.deep, 
-                                     f"26 degrees Celsius isotherm depth (Synthetic), {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Isotherm: %{z:.1f} (m)<extra></extra>')
+        # OHC and Isotherm removed
 
 
         # ----------- Updates the figures with the last transect line drawn -----------
@@ -147,11 +174,7 @@ class MainFigures:
         if trans_lines != []:
             fig_temp['layout']['shapes'] = [trans_lines]
             fig_sal['layout']['shapes'] = [trans_lines]
-            fig_MLD['layout']['shapes'] = [trans_lines]
-            fig_ohc['layout']['shapes'] = [trans_lines]
-            fig_iso['layout']['shapes'] = [trans_lines]
             # fig_temp_err['layout']['shapes'] = [trans_lines]
             # fig_sal_err['layout']['shapes'] = [trans_lines]
 
-        # return [fig_temp, fig_temp_err, fig_sal, fig_sal_err, fig_MLD]
-        return [fig_temp, fig_sal, fig_MLD, fig_ohc, fig_iso]
+        return [fig_temp, fig_sal]

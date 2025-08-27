@@ -6,8 +6,14 @@ import math
 
 class Transects:
     def __init__(self, data, styles, res = 0.04): 
+        # Ensure DataArrays with a leading time dimension for interpolation
         self.temp = data['Temperature']
         self.sal = data['Salinity']
+        if 'time' not in self.temp.dims:
+            self.temp = self.temp.expand_dims(dim='time')
+        if 'time' not in self.sal.dims:
+            self.sal = self.sal.expand_dims(dim='time')
+            
         self.depths = data.variables['depth'][:]  # Add this line
         self.styles = styles
         self.res = res # Resolution for transect

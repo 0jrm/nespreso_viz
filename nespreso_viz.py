@@ -15,11 +15,17 @@ from datetime import datetime
 # %% Make a basic dash interface to explore a NetCDF file
 
 # Load your NetCDF data
-file_name = '/var/www/virtualhosts/ozavala.coaps.fsu.edu/nespreso_viz/data/NeSPReSO_20230801_to_20230910.nc'
+file_path = "/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO"
+file_name = '/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO/nespreso_grid_2020-01-01.nc'
 # file_name = 'data/NeSPReSO_20230801_to_20230910.nc'
 
 ds = xr.open_dataset(file_name)
-dates = ds['time'].values
+
+# Normalize time to an array of at least length 1
+_raw_time = ds['time'].values
+dates = np.atleast_1d(_raw_time)
+has_time_dim = len(dates) > 1
+print(f"Time entries detected: {len(dates)}")
 
 start_date = '2024-04-01'
 styles_obj = NespresoStyles(dates, start_date)
@@ -32,11 +38,8 @@ currently_drawn_line_id = None
 # Selected locations
 transect_loc = [[24, -90], [24, -92]]
 
-# Create Dash app
-# app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-app = dash.Dash(__name__, 
-                requests_pathname_prefix='/nespreso_viz/',
-                external_stylesheets=[dbc.themes.BOOTSTRAP])
+# Create Dash app (simplify base path for local debugging)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
 # Create layout with three rows and specified figures
@@ -51,17 +54,29 @@ app.layout = styles_obj.default_layout()
     Input('date-picker-single', 'date'),
 )
 def update_calendar_store(selected_date):
+    print(f"update_calendar_store called with selected_date: {selected_date}")
+    
     if not selected_date:
         selected_datetime = start_date
         selected_date_str = datetime.strptime(start_date, '%Y-%m-%d').strftime("%b %d, %Y")
+        print(f"No date selected, using default: {selected_date_str}")
     else:
         selected_datetime = datetime.strptime(selected_date, '%Y-%m-%d')
         selected_date_str = datetime.strptime(selected_date, '%Y-%m-%d').strftime("%b %d, %Y")
+        print(f"Date selected: {selected_date_str}")
 
-    dates_np = np.array(dates, dtype='datetime64')
-    date_idx = np.argmin(np.abs(dates_np - np.datetime64(selected_datetime)))
+    # Handle single time case
+    if not has_time_dim:
+        # Single time - always return index 0
+        date_idx = 0
+        print(f"Single time file: using date_idx = {date_idx}")
+    else:
+        # Multiple times - find closest match
+        dates_np = np.array(dates, dtype='datetime64')
+        date_idx = np.argmin(np.abs(dates_np - np.datetime64(selected_datetime)))
+        print(f"Multiple time file: using date_idx = {date_idx}")
 
-    return [f"NesPreso date {selected_date_str}", date_idx, selected_date_str]
+    return [f"Sat fields for {selected_date_str}", date_idx, selected_date_str]
 
 # =================== Profile locations ===================
 @app.callback(
@@ -147,6 +162,10 @@ def update_transect_locations(relayout_data_aviso, relayout_data_temp, relayout_
     State('cur_date_str', 'data'),
 )
 def update_satellite_figures(prof_loc, date_idx, trans_lines, cur_date_str):
+    print(f"update_satellite_figures -> date_idx={date_idx}, prof_loc_len={0 if not prof_loc else len(prof_loc)}, cur_date_str={cur_date_str}")
+    # Guard
+    if date_idx is None:
+        date_idx = 0
     # If trans_lines is
     if trans_lines is None:
         trans_lines = []
@@ -160,12 +179,7 @@ def update_satellite_figures(prof_loc, date_idx, trans_lines, cur_date_str):
 # Update figure based on selections or a default example
 @app.callback(
     Output('fig_temp', 'figure'),
-    # Output('fig_temp_err', 'figure'),
     Output('fig_sal', 'figure'),
-    # Output('fig_sal_err', 'figure'),
-    Output('fig_mld', 'figure'),
-    Output('fig_ohc', 'figure'),
-    Output('fig_iso', 'figure'),
     Input('prof_loc', 'data'),
     Input('cur_date', 'data'),
     Input('trans_lines', 'data'),
@@ -173,14 +187,18 @@ def update_satellite_figures(prof_loc, date_idx, trans_lines, cur_date_str):
     State('cur_date_str', 'data'),
 )
 def update_nespreso_figures(prof_loc, date_idx, trans_lines, depth_idx, cur_date_str):
+    print(f"update_nespreso_figures -> date_idx={date_idx}, depth_idx={depth_idx}, prof_loc_len={0 if not prof_loc else len(prof_loc)}")
+    # Guards
+    if date_idx is None:
+        date_idx = 0
+    if depth_idx is None:
+        depth_idx = 0
     # If trans_lines is
     if trans_lines is None:
         trans_lines = []
 
-    fig_temp, fig_sal, fig_mld, fig_ohc, fig_iso = mainfigs_obj.update_nespreso_maps(prof_loc, date_idx, depth_idx, trans_lines, cur_date_str)
-
-    # return [fig_temp, fig_temp_err, fig_sal, fig_sal_err, fig_mld]
-    return [fig_temp, fig_sal, fig_mld, fig_ohc, fig_iso]
+    fig_temp, fig_sal = mainfigs_obj.update_nespreso_maps(prof_loc, date_idx, depth_idx, trans_lines, cur_date_str)
+    return [fig_temp, fig_sal]
 
 ## ================================ Profiles figures ====================================
 @app.callback(
@@ -193,6 +211,11 @@ def update_nespreso_figures(prof_loc, date_idx, trans_lines, depth_idx, cur_date
     State('cur_date_str', 'data'),
 )
 def update_profiles(date_idx, prof_loc, depth_type, depth_idx, cur_date_str):
+    print(f"update_profiles -> date_idx={date_idx}, depth_type={depth_type}, depth_idx={depth_idx}, prof_loc_len={0 if not prof_loc else len(prof_loc)}")
+    if date_idx is None:
+        date_idx = 0
+    if depth_idx is None:
+        depth_idx = 0
 
     fig_temp_prof, fig_sal_prof = prof_obj.update_profiles(prof_loc, date_idx, 
                                                            depth_type, cur_date_str, 
@@ -223,7 +246,7 @@ def update_trans(date_idx, cur_transect, depth_type, cur_date_str):
 
 if __name__ == '__main__':
     # Debug mode
-   app.run_server(debug=False)
+   app.run(debug=False)
 
     # Production mode at ip 144.174.7.151
     # app.run_server(debug=False, host='144.174.7.151', port=8050)

@@ -75,8 +75,11 @@ class NespresoStyles:
         pl_colorscale = []
         
         for k in range(pl_entries):
-            C = list(map(np.uint8, np.array(cmap(k*h)[:3])*255))
-            pl_colorscale.append([k*h, 'rgb'+str((C[0], C[1], C[2]))])
+            r, g, b = cmap(k*h)[:3]
+            r = int(round(float(r)*255))
+            g = int(round(float(g)*255))
+            b = int(round(float(b)*255))
+            pl_colorscale.append([k*h, f'rgb({r}, {g}, {b})'])
             
         return pl_colorscale
 
@@ -115,6 +118,7 @@ class NespresoStyles:
                                 # Restrict date selection to March 1st to April 30th 2024
                                 min_date_allowed=min(self.days).astype('datetime64[D]').astype(str),
                                 max_date_allowed=max(self.days).astype('datetime64[D]').astype(str),
+                                date=min(self.days).astype('datetime64[D]').astype(str),
                                 clearable=True,
                                 with_portal=True,
                             )),
@@ -123,12 +127,12 @@ class NespresoStyles:
                             dbc.Col(dbc.Button("Clear Profiles", id="clear_prof", className="mr-1"))
                         ])
                         ], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_aviso', config=self.def_config), xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_SST', config=self.def_config),   xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_SSS', config=self.def_config),   xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_aviso', figure=self.def_figure, config=self.def_config), xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_SST',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_SSS',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
                     dcc.Store(id='prof_loc', data=[]),
-                    dcc.Store(id='cur_date', data=[]),
-                    dcc.Store(id='cur_date_str', data=''),
+                    dcc.Store(id='cur_date', data=0),
+                    dcc.Store(id='cur_date_str', data=selected_date_str),
                     dcc.Store(id='trans_lines', data=[]),
                 ]),
                 # ------------------- Line separator  -------------------
@@ -152,21 +156,15 @@ class NespresoStyles:
                 ]),
                 # ------------------- Transects and Profiles-------------------
                 dbc.Row([
-                dbc.Col(dcc.Graph(id='fig_temp', config=self.trans_config),       xl=2, lg=4, md=6),
+                dbc.Col(dcc.Graph(id='fig_temp', figure=self.def_figure, config=self.trans_config),       xl=2, lg=4, md=6),
                 dbc.Col(dcc.Graph(id='fig_temp_trans', figure=self.def_figure, config=self.trans_config), xl=2, lg=4, md=6),
-                dbc.Col(dcc.Graph(id='fig_sal', config=self.trans_config),        xl=2, lg=4, md=6),
+                dbc.Col(dcc.Graph(id='fig_sal',  figure=self.def_figure, config=self.trans_config),        xl=2, lg=4, md=6),
                 dbc.Col(dcc.Graph(id='fig_sal_trans', figure=self.def_figure, config=self.trans_config),   xl=2, lg=4, md=6),
                 dbc.Col(dcc.Graph(id='fig_sal_prof', figure=self.def_figure,config=self.prof_config),    xl=2, lg=4, md=4),
                 dbc.Col(dcc.Graph(id='fig_temp_prof', figure=self.def_figure,config=self.trans_config),  xl=2, lg=4, md=4),
                 ]),
-                # ------------------- Additional metrics (MLD, OHC, ISO) -------------------
-                dbc.Row([
-                dbc.Col(dcc.Graph(id='fig_mld', config=self.trans_config),       xl=3, className="offset-xl-2", lg=4, md=6),
-                dbc.Col(dcc.Graph(id='fig_ohc', config=self.trans_config),       xl=3, lg=4, md=6),
-                dbc.Col(dcc.Graph(id='fig_iso', config=self.trans_config),       xl=3, lg=4, md=4),
-                # dbc.Col(dcc.Graph(id='fig_temp_err', config=self.trans_config), width=3),
-                # dbc.Col(dcc.Graph(id='fig_sal_err', config=self.trans_config), width=3),
-                ]),
+                # ------------------- Additional metrics (removed MLD) -------------------
+                dbc.Row([]),
 
             ])
 
