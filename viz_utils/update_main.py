@@ -3,6 +3,15 @@ import plotly.graph_objs as go
 import cmocean.cm as cm
 import xarray as xr
 from viz_utils.styles import NespresoStyles
+try:
+    import cartopy.feature as cfeature
+    from cartopy.io import shapereader as shpreader
+    from shapely.geometry import LineString, MultiLineString
+except Exception:  # Optional dependency; figures will still render without coastlines
+    cfeature = None
+    shpreader = None
+    LineString = None
+    MultiLineString = None
 # from viz_utils.ocean_utils import *
 
 class MainFigures:
@@ -51,28 +60,51 @@ class MainFigures:
         self.depths = data['depth'].values  # Add this line
         self.styles = styles
 
+        # Pre-compute coastline traces for the default bbox
+        self.bbox = dict(lon_min=-99, lon_max=-81, lat_min=18, lat_max=30)
+        self.coastline_traces = self._generate_coastline_traces(self.bbox)
+
         # Calculate pressure for first 200 mts
         # th = 100
         # pressure = calculate_ocean_pressure(self.temp[:,:,:,:th], self.sal[:,:,:,:th], self.depths[:th])
         # self.mld = get_mld(self.sal[:,:,:,:th], self.temp[:,:,:,:th], pressure[:,:,:,:th])
 
-    def make_figure(self, data, prof_locations_scatter, colorscheme, title, hovertemplate):
+    def make_figure(self, data, prof_locations_scatter, colorscheme, title, hovertemplate, colorbar_title, zmin=None, zmax=None):
+        heatmap_trace = go.Heatmap(
+            z=data,
+            colorscale=self.styles.cmocean_to_plotly(colorscheme, 256),
+            showscale=True,
+            x=self.lons,
+            y=self.lats,
+            hovertemplate=hovertemplate,
+            colorbar=dict(title={'text': colorbar_title, 'side': 'right'}, thickness=14, lenmode='fraction', len=0.9),
+            zmin=zmin,
+            zmax=zmax,
+        )
+
+        # Invisible corners to enforce reset axes ranges
+        corner_trace = go.Scatter(
+            x=[self.bbox['lon_min'], self.bbox['lon_max']],
+            y=[self.bbox['lat_min'], self.bbox['lat_max']],
+            mode='markers',
+            marker=dict(size=0),
+            opacity=0,
+            hoverinfo='skip',
+            showlegend=False,
+        )
+
+        traces = [heatmap_trace, corner_trace]
+        # Add Cartopy-derived coastlines if available
+        if self.coastline_traces:
+            traces.extend(self.coastline_traces)
+        traces.append(prof_locations_scatter)
+
         cur_fig = go.Figure(
-            data=[
-                go.Heatmap(
-                    z=data,
-                    colorscale=self.styles.cmocean_to_plotly(colorscheme, 256),
-                    showscale=True,
-                    x=self.lons,
-                    y=self.lats,
-                    hovertemplate=hovertemplate
-                ),
-                prof_locations_scatter
-            ],
+            data=traces,
             layout=go.Layout(
                 title=title,
-                xaxis=dict(title="Longitude"),
-                yaxis=dict(title="Latitude"),
+                xaxis=dict(title="Longitude", range=[-99, -81]),
+                yaxis=dict(title="Latitude", range=[18, 30]),
                 dragmode="pan",
                 height=self.styles.fig_height,
                 margin=self.styles.margins,
@@ -81,6 +113,30 @@ class MainFigures:
         )
 
         return cur_fig
+
+    def _generate_coastline_traces(self, bbox):
+        if cfeature is None or shpreader is None:
+            return []
+        try:
+            shp_path = shpreader.natural_earth(resolution='50m', category='physical', name='coastline')
+            reader = shpreader.Reader(shp_path)
+            traces = []
+            for geom in reader.geometries():
+                if isinstance(geom, (LineString,)):
+                    xs, ys = geom.xy
+                    # Quick bbox filter
+                    if max(xs) < bbox['lon_min'] or min(xs) > bbox['lon_max'] or max(ys) < bbox['lat_min'] or min(ys) > bbox['lat_max']:
+                        continue
+                    traces.append(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(color='black', width=1), hoverinfo='skip', showlegend=False))
+                elif isinstance(geom, MultiLineString):
+                    for line in geom.geoms:
+                        xs, ys = line.xy
+                        if max(xs) < bbox['lon_min'] or min(xs) > bbox['lon_max'] or max(ys) < bbox['lat_min'] or min(ys) > bbox['lat_max']:
+                            continue
+                        traces.append(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(color='black', width=1), hoverinfo='skip', showlegend=False))
+            return traces
+        except Exception:
+            return []
 
     def update_satellite_figures(self, prof_loc, date_idx, trans_lines, cur_date_str):
         if not prof_loc:
@@ -99,15 +155,33 @@ class MainFigures:
                     )
 
         # -------------------------- AVISO -------------------------------
-        fig_aviso = self.make_figure(self.aviso[date_idx, :, :], prof_locations, cm.curl, 
-                                     f"AVISO {cur_date_str}", 'Lat: %{y}<br>Lon: %{x}<br>ADT: %{z:.1f} m<extra></extra>')
+        fig_aviso = self.make_figure(
+            self.aviso[date_idx, :, :],
+            prof_locations,
+            cm.curl,
+            f"AVISO",
+            'Lat: %{y}<br>Lon: %{x}<br>ADT: %{z:.2f} m<extra></extra>',
+            'ADT [m]'
+        )
 
         # -------------------------- SST -------------------------------
-        fig_SST = self.make_figure(np.round(self.SST[date_idx,:,:], 2), prof_locations, cm.thermal, 
-                                     f"Temperature (satellite) {cur_date_str}",  'Lat: %{y}<br>Lon: %{x}<br>Temp: %{z:.1f} °F<extra></extra>')
+        fig_SST = self.make_figure(
+            np.round(self.SST[date_idx,:,:] - 273.15, 2),
+            prof_locations,
+            cm.thermal,
+            f"SST",
+            'Lat: %{y}<br>Lon: %{x}<br>Temp: %{z:.2f} °C<extra></extra>',
+            'SST [°C]'
+        )
         # -------------------------- SSS -------------------------------
-        fig_SSS = self.make_figure(self.SSS[date_idx,:,:], prof_locations, cm.haline, 
-                                     f"Salinity (satellite)  {cur_date_str}",  'Lat: %{y}<br>Lon: %{x}<br>Salt: %{z:.1f} PSU<extra></extra>')
+        fig_SSS = self.make_figure(
+            self.SSS[date_idx,:,:],
+            prof_locations,
+            cm.haline,
+            f"SSS",
+            'Lat: %{y}<br>Lon: %{x}<br>Salt: %{z:.2f} PSU<extra></extra>',
+            'SSS [PSU]'
+        )
 
         # Customize the figures as needed based on control_value and the data
 
@@ -155,11 +229,23 @@ class MainFigures:
             depth_idx = 0
         if depth_idx >= self.depths.shape[0]:
             depth_idx = self.depths.shape[0] - 1
-        fig_temp = self.make_figure(np.round(self.temp[date_idx,depth_idx,:,:], 2), prof_locations, cm.thermal, 
-                                     f"Temperature (Synthetic), {depth_idx} m, {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Temp: %{z:.1f} °C<extra></extra>')
+        fig_temp = self.make_figure(
+            np.round(self.temp[date_idx,depth_idx,:,:], 2),
+            prof_locations,
+            cm.thermal,
+            f"Synthetic T, {depth_idx} m",
+            'Lat: %{y}<br>Lon: %{x}<br>Temp: %{z:.2f} °C<extra></extra>',
+            'Temperature [°C]'
+        )
         # -------------------------- Sal -------------------------------
-        fig_sal = self.make_figure(self.sal[date_idx,depth_idx,:,:], prof_locations, cm.haline, 
-                                     f"Salinity (Synthetic),{depth_idx} m, {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Salt: %{z:.1f} PSU<extra></extra>')
+        fig_sal = self.make_figure(
+            self.sal[date_idx,depth_idx,:,:],
+            prof_locations,
+            cm.haline,
+            f"Synthetic S, {depth_idx} m",
+            'Lat: %{y}<br>Lon: %{x}<br>Salt: %{z:.2f} PSU<extra></extra>',
+            'Salinity [PSU]'
+        )
         # -------------------------- Temp Error -------------------------------
         # fig_temp_err = self.make_figure(np.round(self.temp_err[date_idx,depth_idx,:,:], 2), prof_locations, cm.thermal, 
                                     #  f"Temperature Error (Synthetic), {depth_idx} m, {cur_date_str} ",  'Lat: %{y}<br>Lon: %{x}<br>Temp Error: %{z:.1f} °C<extra></extra>')

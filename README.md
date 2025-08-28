@@ -86,24 +86,28 @@ The application expects NetCDF files with the following variables:
 
 1. **Date Selection**: Use the calendar picker to select specific dates
 2. **Depth Options**: Choose depth ranges for analysis (100m, 200m, 300m, 400m, or custom)
-3. **Profile Locations**: Click on maps to add profile locations for vertical analysis
-4. **Transect Lines**: Draw lines on maps to create cross-sectional views
+3. **Profile Locations**: Toggle 'Add Points' and click on any map to add profile points; use Undo/Clear in the profile controls when in use.
+4. **Transect Lines**: Use the 'Draw line' tool to add a transect on any map; use Undo/Clear in the transect controls when in use.
 5. **Clear Profiles**: Remove all profile locations with the clear button
 
 ### Visualization Panels
 
 #### Satellite Data (Top Row)
-- **AVISO**: Sea Surface Height anomalies
-- **SST**: Sea Surface Temperature from satellite
-- **SSS**: Sea Surface Salinity from satellite
+- Toggle between a single map (default: AVISO) and all three using the 'Show all maps' switch.
+- Select the single displayed field with the 'Field' dropdown.
+- **AVISO**: Sea Surface Height anomalies [m]
+- **SST**: Sea Surface Temperature from satellite [°C] (converted from Kelvin)
+- **SSS**: Sea Surface Salinity from satellite [PSU]
 
 #### NeSPReSO Predictions (Middle Row)
-- **Temperature Maps**: Model-predicted temperature at selected depth
-- **Salinity Maps**: Model-predicted salinity at selected depth
-- **Temperature Transects**: Cross-sectional temperature along drawn lines
-- **Salinity Transects**: Cross-sectional salinity along drawn lines
-- **Temperature Profiles**: Vertical temperature profiles at selected locations
-- **Salinity Profiles**: Vertical salinity profiles at selected locations
+- Temperature and salinity maps now match satellite map sizes.
+- Coastlines added and default bbox set to [lon: -99 to -81, lat: 18 to 30].
+- **Temperature Maps**: Model-predicted temperature at selected depth [°C]
+- **Salinity Maps**: Model-predicted salinity at selected depth [PSU]
+- **Temperature Transects**: Cross-sectional temperature along drawn lines [°C]
+- **Salinity Transects**: Cross-sectional salinity along drawn lines [PSU]
+- **Temperature Profiles**: Vertical temperature profiles at selected locations [°C]
+- **Salinity Profiles**: Vertical salinity profiles at selected locations [PSU]
 
 #### Derived Metrics (Bottom Row)
 - **MLD**: Mixed Layer Depth

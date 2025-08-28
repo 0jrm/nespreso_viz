@@ -56,11 +56,11 @@ class Profiles:
                                                    name=f'{loc_names[i]}', marker=dict(color=self.styles.colors[i])))  # Use self.depths and self.colors
             
             fig_temp_prof.update_layout(
-                title=f"Temperature Profiles {cur_date_str}",
+                title=f"Temperature Profiles",
                 xaxis=dict(title="Temperature (°C)"),
                 yaxis=dict(title="Depth (m)", autorange="reversed"),
                 dragmode="pan",
-                height=self.styles.fig_height,  
+                height=int(self.styles.fig_height*1.1),  
                 margin=self.styles.margins,  
             )
             # --------------- Salinity profile -------------------
@@ -96,11 +96,11 @@ class Profiles:
                 )
 
             fig_sal_prof.update_layout(
-                title=f"Salinity Profiles {cur_date_str}",
+                title=f"Salinity Profiles",
                 xaxis=dict(title="Salinity (PSU)"),
                 yaxis=dict(title="Depth (m)", autorange="reversed"),
                 dragmode="pan",
-                height=self.styles.fig_height,  
+                height=int(self.styles.fig_height*1.1),  
                 margin=self.styles.margins,  
             )
         

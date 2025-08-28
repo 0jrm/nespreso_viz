@@ -10,6 +10,9 @@ pandas>=2.0.0
 # Visualization and plotting
 plotly>=5.15.0
 cmocean>=2.0.0
+cartopy>=0.21.0
+shapely>=2.0.0
+pyproj>=3.5.0
 
 # Oceanographic calculations
 gsw>=3.6.0

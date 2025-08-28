@@ -40,7 +40,7 @@ class NespresoStyles:
 
     def_config = dict(
         modeBarButtonsToRemove=['zoomOut2d','zoomIn2d','lasso','select2d'],
-        modeBarButtonsToAdd=['drawline'],
+        modeBarButtonsToAdd=['drawline','eraseshape'],
         scrollZoom=True,
         displayModeBar=True,
         displaylogo=False,
@@ -48,7 +48,7 @@ class NespresoStyles:
 
     trans_config = dict(
         modeBarButtonsToRemove=['zoomOut2d','zoomIn2d', 'autoScale2d','lasso', 'select'],
-        modeBarButtonsToAdd=[],
+        modeBarButtonsToAdd=['drawline','eraseshape'],
         scrollZoom=True,
         displayModeBar=True,
         displaylogo=False,
@@ -87,29 +87,40 @@ class NespresoStyles:
         selected_date_str = self.selected_date.strftime("%b %d, %Y")
         layout = dbc.Container(fluid=True, children=[
                 dbc.Row([
-                dbc.Col(html.H1(f"NesPreso date {selected_date_str}", id='nespreso-date'), style={'textAlign': 'center'})
+                dbc.Col(html.H1(f"Satellite fields for {selected_date_str}", id='nespreso-date'), style={'textAlign': 'center'})
                 ]),
                 # Include a Row with a calendar picker
-                # ------------------- Top row of figures (Satellite)-------------------
+                # ------------------- Top row of figures (Satellite primary)-------------------
                 dbc.Row([
                     dbc.Col(
                         [
                         dbc.Row([
-                            dbc.Col(html.P("Depth options: "), width=3),
-                            dbc.Col(dcc.Dropdown(
-                                id='depth_selection',
-                                options=[
-                                    {'label': 'First 100 m', 'value': 'upto100'},
-                                    {'label': 'First 200 m', 'value': 'upto200'},
-                                    {'label': 'First 300 m', 'value': 'upto300'},
-                                    {'label': 'First 400 m', 'value': 'upto400'},
-                                    {'label': '(all) Every 10 m', 'value': 'every10'},
-                                    {'label': '(all) Every 5 m', 'value': 'every05'},
-                                    {'label': '(all) Every 1 m', 'value': 'every01'},
-                                ],
-                                value='upto200',
-                                clearable=False
-                            ), width=6),
+                            dbc.Col(html.P("Satellite display:"), width=4),
+                            dbc.Col(
+                                dbc.Checklist(
+                                    id='show_all_sat',
+                                    options=[{'label': 'Show all maps', 'value': 'all'}],
+                                    value=[],
+                                    switch=True
+                                ),
+                                width=8
+                            ),
+                        ]),
+                        dbc.Row([
+                            dbc.Col(html.P("Field:"), width=3),
+                            dbc.Col(
+                                dcc.Dropdown(
+                                    id='sat_field_selector',
+                                    options=[
+                                        {'label': 'AVISO', 'value': 'AVISO'},
+                                        {'label': 'SST', 'value': 'SST'},
+                                        {'label': 'SSS', 'value': 'SSS'},
+                                    ],
+                                    value='AVISO',
+                                    clearable=False
+                                ),
+                                width=9
+                            ),
                         ]),
                         dbc.Row([
                             dbc.Col(dcc.DatePickerSingle(
@@ -124,44 +135,128 @@ class NespresoStyles:
                             )),
                         ]),
                         dbc.Row([
-                            dbc.Col(dbc.Button("Clear Profiles", id="clear_prof", className="mr-1"))
+                            dbc.Col(
+                                dbc.Checklist(
+                                    id='enable_add_points',
+                                    options=[{'label': 'Add Points', 'value': 'on'}],
+                                    value=['on'],
+                                    switch=True
+                                ),
+                                width=12
+                            ),
                         ])
                         ], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_aviso', figure=self.def_figure, config=self.def_config), xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_SST',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_SSS',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_aviso', figure=self.def_figure, config=self.def_config), xl=10, lg=9, md=8),
                     dcc.Store(id='prof_loc', data=[]),
                     dcc.Store(id='cur_date', data=0),
                     dcc.Store(id='cur_date_str', data=selected_date_str),
                     dcc.Store(id='trans_lines', data=[]),
                 ]),
+                # ------------------- Second row of satellite figures (secondary maps) -------------------
+                dbc.Row([
+                    dbc.Col([], xl=2, lg=3, md=4),
+                    dbc.Col(dcc.Graph(id='fig_SST',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_SSS',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
+                    dbc.Col([], xl=4, lg=1, md=0),
+                ]),
                 # ------------------- Line separator  -------------------
                 dbc.Row([
                 dbc.Col(html.Hr(), style={'borderTop': '1px solid #ccc', 'margin': '20px 0'},xl=2, lg=1, md=0),  
-                dbc.Col(html.H1("NesPreso Predictions", id='nespreso-predictions', style={'textAlign': 'center'}), xl=3, lg=3, md=4),
-                dbc.Col([
-                    html.Div("Depth:", className="text-right font-weight-bold"),
-                    dcc.Slider(
-                        id='depth_idx',
-                        min=0,
-                        max=1800,
-                        step=10,
-                        value=0,
-                        marks={i: str(i) for i in range(0, 1800, 100)},
-                        tooltip={"placement": "bottom", "always_visible": True}
-                    )],
-                    xl=3, lg=7, md=8, sm=12,  # Adjust the width as needed
-                ),
-                dbc.Col(html.Hr(), style={'borderTop': '1px solid #ccc', 'margin': '20px 0'},xl=3, lg=1, md=0),  
+                dbc.Col(html.H1("NeSPReSO synthetics", id='nespreso-predictions', style={'textAlign': 'center'}), xl=8, lg=10, md=11),
+                dbc.Col(html.Hr(), style={'borderTop': '1px solid #ccc', 'margin': '20px 0'},xl=2, lg=1, md=0),  
                 ]),
-                # ------------------- Transects and Profiles-------------------
+                # ------------------- Depth slider row (below title) -------------------
                 dbc.Row([
-                dbc.Col(dcc.Graph(id='fig_temp', figure=self.def_figure, config=self.trans_config),       xl=2, lg=4, md=6),
-                dbc.Col(dcc.Graph(id='fig_temp_trans', figure=self.def_figure, config=self.trans_config), xl=2, lg=4, md=6),
-                dbc.Col(dcc.Graph(id='fig_sal',  figure=self.def_figure, config=self.trans_config),        xl=2, lg=4, md=6),
-                dbc.Col(dcc.Graph(id='fig_sal_trans', figure=self.def_figure, config=self.trans_config),   xl=2, lg=4, md=6),
-                dbc.Col(dcc.Graph(id='fig_sal_prof', figure=self.def_figure,config=self.prof_config),    xl=2, lg=4, md=4),
-                dbc.Col(dcc.Graph(id='fig_temp_prof', figure=self.def_figure,config=self.trans_config),  xl=2, lg=4, md=4),
+                    dbc.Col([], xl=2, lg=3, md=4),
+                    dbc.Col([
+                        html.Div("Display depth:", className="text-right font-weight-bold"),
+                        dcc.Slider(
+                            id='depth_idx',
+                            min=0,
+                            max=1800,
+                            step=10,
+                            value=0,
+                            marks={0: '0', 500: '500', 1000: '1000', 1800: '1800'},
+                            tooltip={"placement": "bottom", "always_visible": True},
+                            className='small-slider'
+                        )
+                    ], xl=8, lg=9, md=8, sm=12),
+                    dbc.Col([], xl=2, lg=0, md=0),
+                ]),
+                # ------------------- NeSPReSO maps (match satellite sizes) -------------------
+                dbc.Row([
+                    dbc.Col([], xl=2, lg=3, md=4),
+                    dbc.Col(dcc.Graph(id='fig_temp', figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_sal',  figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
+                    dbc.Col([], xl=4, lg=1, md=0),
+                ]),
+                # ------------------- Transect controls and plots -------------------
+                dbc.Row([
+                    dbc.Col(
+                        html.Div(id='transect_controls', children=[
+                            html.Div(
+                                ["Use 'Draw line' ", html.I(className='bi bi-vector-pen'), " to draw transects."],
+                                id='instructions_transect',
+                                style={'padding':'6px','fontStyle':'italic'}
+                            ),
+                            dbc.ButtonGroup([
+                                dbc.Button("Undo", id="undo_transect", color="secondary"),
+                                dbc.Button("Clear", id="clear_transect", color="danger"),
+                            ], id='transect_buttons', style={'display':'none'})
+                        ]), width=12
+                    )
+                ]),
+                dbc.Row([
+                    dbc.Col([], xl=2, lg=3, md=4),
+                    dbc.Col(dcc.Graph(id='fig_temp_trans', figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_sal_trans',  figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
+                    dbc.Col([], xl=4, lg=1, md=0),
+                ]),
+                # ------------------- Depth options between transect and profile -------------------
+                dbc.Row([
+                    dbc.Col([], xl=2, lg=3, md=4),
+                    dbc.Col([
+                        dbc.Row([
+                            dbc.Col(html.P("Depth options:"), width=3),
+                            dbc.Col(dcc.Dropdown(
+                                id='depth_selection',
+                                options=[
+                                    {'label': 'First 100 m', 'value': 'upto100'},
+                                    {'label': 'First 200 m', 'value': 'upto200'},
+                                    {'label': 'First 300 m', 'value': 'upto300'},
+                                    {'label': 'First 500 m', 'value': 'upto500'},
+                                    {'label': '(all) Every 10 m', 'value': 'every10'},
+                                    {'label': '(all) Every 5 m', 'value': 'every05'},
+                                    {'label': '(all) Every 1 m', 'value': 'every01'},
+                                ],
+                                value='upto500',
+                                clearable=False
+                            ), width=9)
+                        ])
+                    ], xl=8, lg=9, md=8),
+                    dbc.Col([], xl=2, lg=0, md=0)
+                ]),
+                # ------------------- Profile controls and plots -------------------
+                dbc.Row([
+                    dbc.Col(
+                        html.Div(id='profile_controls', children=[
+                            html.Div(
+                                ["Use 'Pan and add profile' ", html.I(className='bi bi-arrows-move'), " then click to see T and S profiles at locations."],
+                                id='instructions_profile',
+                                style={'padding':'6px','fontStyle':'italic'}
+                            ),
+                            dbc.ButtonGroup([
+                                dbc.Button("Undo", id="undo_prof", color="secondary"),
+                                dbc.Button("Clear", id="clear_prof", color="danger"),
+                            ], id='profile_buttons', style={'display':'none'})
+                        ]), width=12
+                    )
+                ]),
+                dbc.Row([
+                    dbc.Col([], xl=2, lg=3, md=4),
+                    dbc.Col(dcc.Graph(id='fig_temp_prof', figure=self.def_figure,config=self.trans_config),  xl=3, lg=4, md=6),
+                    dbc.Col(dcc.Graph(id='fig_sal_prof', figure=self.def_figure,config=self.prof_config),    xl=3, lg=4, md=6),
+                    dbc.Col([], xl=4, lg=1, md=0),
                 ]),
                 # ------------------- Additional metrics (removed MLD) -------------------
                 dbc.Row([]),
