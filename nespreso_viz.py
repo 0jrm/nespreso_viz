@@ -13,27 +13,82 @@ from viz_utils.styles import NespresoStyles
 from viz_utils.update_trans import Transects
 from viz_utils.update_main import MainFigures
 from datetime import datetime
+import os
+import re
+from functools import lru_cache
 
 # %% Make a basic dash interface to explore a NetCDF file
 
-# Load your NetCDF data
+### Load available NetCDF files and default to the latest date
 file_path = "/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO"
-file_name = '/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO/nespreso_grid_2020-01-01.nc'
-# file_name = 'data/NeSPReSO_20230801_to_20230910.nc'
 
-ds = xr.open_dataset(file_name)
+date_regex = re.compile(r"nespreso_grid_(\d{4}-\d{2}-\d{2})\.nc$")
 
-# Normalize time to an array of at least length 1
-_raw_time = ds['time'].values
-dates = np.atleast_1d(_raw_time)
+def _scan_available_dates(directory: str):
+    try:
+        candidates = [f for f in os.listdir(directory) if f.endswith('.nc')]
+    except Exception as exc:
+        print(f"Failed listing directory {directory}: {exc}")
+        candidates = []
+    date_to_file = {}
+    for fname in candidates:
+        m = date_regex.search(fname)
+        if not m:
+            continue
+        date_str = m.group(1)
+        full_path = os.path.join(directory, fname)
+        # Keep the last occurrence if duplicates; they should point to same day
+        date_to_file[date_str] = full_path
+    sorted_dates = sorted(date_to_file.keys())
+    # Convert to numpy datetime64[D]
+    days = np.array([np.datetime64(d, 'D') for d in sorted_dates]) if sorted_dates else np.array([np.datetime64('2020-01-01')])
+    return date_to_file, days
+
+DATE_TO_FILE, dates = _scan_available_dates(file_path)
+if dates.size == 0:
+    # Fallback: try a known file
+    default_file_name = '/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO/nespreso_grid_2020-01-01.nc'
+    ds = xr.open_dataset(default_file_name)
+    dates = np.atleast_1d(ds['time'].values)
+    print(f"Fallback time entries detected: {len(dates)}")
+else:
+    default_date_np = dates.max()
+    default_date_str = str(default_date_np.astype('datetime64[D]'))
+    default_file_name = DATE_TO_FILE.get(default_date_str)
+    ds = xr.open_dataset(default_file_name)
+    print(f"Loaded default dataset for {default_date_str}: {default_file_name}")
+
 has_time_dim = len(dates) > 1
-print(f"Time entries detected: {len(dates)}")
-
-start_date = '2024-04-01'
+start_date = str(dates.max().astype('datetime64[D]')) if dates.size > 0 else '2024-04-01'
 styles_obj = NespresoStyles(dates, start_date)
+# Instantiate default objects for initial render
 prof_obj = Profiles(ds, styles_obj)
 trans_obj = Transects(ds, styles_obj)
 mainfigs_obj = MainFigures(ds, styles_obj)
+
+# Lightweight cache for datasets by date
+@lru_cache(maxsize=16)
+def get_ds_for_date(date_str: str):
+    path = DATE_TO_FILE.get(date_str)
+    if path is None:
+        # Choose nearest available date
+        if dates.size == 0:
+            return ds
+        target = np.datetime64(date_str)
+        nearest_idx = int(np.argmin(np.abs(dates - target)))
+        use_date = str(dates[nearest_idx].astype('datetime64[D]'))
+        path = DATE_TO_FILE.get(use_date)
+        print(f"Requested date {date_str} not found, using nearest {use_date}")
+    try:
+        cur_ds = xr.open_dataset(path)
+        return cur_ds
+    except Exception as exc:
+        print(f"Failed to open dataset {path}: {exc}")
+        return ds
+
+def get_objs_for_date(date_str: str):
+    cur_ds = get_ds_for_date(date_str)
+    return MainFigures(cur_ds, styles_obj), Profiles(cur_ds, styles_obj), Transects(cur_ds, styles_obj)
 
 currently_drawn_line_id = None
 
@@ -43,6 +98,7 @@ transect_loc = [[24, -90], [24, -92]]
 # Create Dash app (simplify base path for local debugging)
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP])
 server = app.server
+app.config.suppress_callback_exceptions = True
 
 # Create layout with three rows and specified figures
 app.layout = styles_obj.default_layout()
@@ -53,32 +109,85 @@ app.layout = styles_obj.default_layout()
     Output('nespreso-predictions', 'children'),
     Output('cur_date', 'data'),
     Output('cur_date_str', 'data'),
+    Input('date-picker-single', 'value'),
     Input('date-picker-single', 'date'),
+    prevent_initial_call=False,
 )
-def update_calendar_store(selected_date):
-    print(f"update_calendar_store called with selected_date: {selected_date}")
-    
+def update_calendar_store(selected_value, selected_date_legacy):
+    print(f"update_calendar_store called with selected_value={selected_value}, date={selected_date_legacy}")
+    # Support both Mantine (value) and DCC (date)
+    selected_date = selected_value if selected_value else selected_date_legacy
     if not selected_date:
-        selected_datetime = start_date
-        selected_date_str = datetime.strptime(start_date, '%Y-%m-%d').strftime("%b %d, %Y")
-        print(f"No date selected, using default: {selected_date_str}")
-    else:
+        selected_date = start_date
+    # Compute formatted label and index within available dates
+    try:
         selected_datetime = datetime.strptime(selected_date, '%Y-%m-%d')
-        selected_date_str = datetime.strptime(selected_date, '%Y-%m-%d').strftime("%b %d, %Y")
-        print(f"Date selected: {selected_date_str}")
+    except Exception:
+        selected_datetime = datetime.strptime(start_date, '%Y-%m-%d')
+    selected_date_str = selected_datetime.strftime("%b %d, %Y")
 
-    # Handle single time case
-    if not has_time_dim:
-        # Single time - always return index 0
+    if dates.size <= 1:
         date_idx = 0
-        print(f"Single time file: using date_idx = {date_idx}")
     else:
-        # Multiple times - find closest match
-        dates_np = np.array(dates, dtype='datetime64')
-        date_idx = np.argmin(np.abs(dates_np - np.datetime64(selected_datetime)))
-        print(f"Multiple time file: using date_idx = {date_idx}")
+        date_idx = int(np.argmin(np.abs(dates - np.datetime64(selected_date))))
+    print(f"Selected date index within available pool: {date_idx}")
 
-    return [f"NeSPReSO synthetics for {selected_date_str}", date_idx, selected_date_str]
+    return [f"NeSPReSO synthetics for {selected_date_str}", date_idx, selected_date]
+
+# Fallback-only: sync Month/Year dropdowns with DatePicker and vice versa
+@app.callback(
+    Output('date-picker-single', 'initial_visible_month', allow_duplicate=True),
+    Output('date-picker-single', 'date', allow_duplicate=True),
+    Input('calendar_month', 'value'),
+    Input('calendar_year', 'value'),
+    State('date-picker-single', 'date'),
+    prevent_initial_call=True,
+)
+def change_calendar_month_year(month_value, year_value, current_date):
+    # If Mantine calendar is active, these inputs won't exist (callback will be suppressed by Dash)
+    if month_value is None or year_value is None:
+        raise dash.exceptions.PreventUpdate
+    try:
+        cur_day = int(current_date.split('-')[2]) if current_date else 1
+    except Exception:
+        cur_day = 1
+    new_date_str = f"{int(year_value):04d}-{int(month_value):02d}-{min(cur_day, 28):02d}"
+    try:
+        if new_date_str not in DATE_TO_FILE:
+            month_prefix = new_date_str[:7]
+            month_candidates = sorted([d for d in DATE_TO_FILE.keys() if d.startswith(month_prefix)])
+            if month_candidates:
+                day_int = int(new_date_str.split('-')[2])
+                def _dist(d):
+                    return abs(int(d.split('-')[2]) - day_int)
+                new_date_str = sorted(month_candidates, key=_dist)[0]
+            else:
+                target = np.datetime64(new_date_str)
+                nearest_idx = int(np.argmin(np.abs(dates - target)))
+                new_date_str = str(dates[nearest_idx].astype('datetime64[D]'))
+    except Exception:
+        pass
+    return new_date_str, new_date_str
+
+@app.callback(
+    Output('calendar_month', 'value', allow_duplicate=True),
+    Output('calendar_year', 'value', allow_duplicate=True),
+    Input('date-picker-single', 'date'),
+    prevent_initial_call=True,
+)
+def sync_month_year_with_date(date_value):
+    if not date_value:
+        date_value = start_date
+    try:
+        year = int(date_value.split('-')[0])
+        month = int(date_value.split('-')[1])
+    except Exception:
+        dt = datetime.strptime(start_date, '%Y-%m-%d')
+        year, month = dt.year, dt.month
+    return month, year
+
+# Keep DatePicker visible month in sync with Month/Year dropdowns
+# Remove sync callbacks as month/year are handled inside the calendar popup
 
 # =================== Profile locations ===================
 @app.callback(
@@ -186,12 +295,12 @@ def update_transect_locations(relayout_data_aviso, relayout_data_temp, relayout_
     Output('fig_SSS', 'figure'),
     Input('prof_loc', 'data'),
     Input('cur_date', 'data'),
+    Input('cur_date_str', 'data'),
     Input('trans_lines', 'data'),
     Input('show_all_sat', 'value'),
     Input('sat_field_selector', 'value'),
-    State('cur_date_str', 'data'),
 )
-def update_satellite_figures(prof_loc, date_idx, trans_lines, show_all_value, selected_field, cur_date_str):
+def update_satellite_figures(prof_loc, date_idx, cur_date_str, trans_lines, show_all_value, selected_field):
     print(f"update_satellite_figures -> date_idx={date_idx}, prof_loc_len={0 if not prof_loc else len(prof_loc)}, cur_date_str={cur_date_str}")
     # Guard
     if date_idx is None:
@@ -199,8 +308,20 @@ def update_satellite_figures(prof_loc, date_idx, trans_lines, show_all_value, se
     # If trans_lines is
     if trans_lines is None:
         trans_lines = []
-
-    fig_aviso, fig_SST, fig_SSS = mainfigs_obj.update_satellite_figures(prof_loc, date_idx, trans_lines, cur_date_str)
+    # Build figures for the chosen date
+    date_key = cur_date_str if isinstance(cur_date_str, str) and len(cur_date_str) == 10 else start_date
+    cur_mainfigs, _, _ = get_objs_for_date(date_key)
+    # Coerce date_idx to be valid for the selected dataset (many daily files have a single time index)
+    try:
+        max_t = max(cur_mainfigs.SST.shape[0], cur_mainfigs.SSS.shape[0], cur_mainfigs.aviso.shape[0])
+        local_idx = int(date_idx) if date_idx is not None else 0
+        if local_idx < 0:
+            local_idx = 0
+        if local_idx >= max_t:
+            local_idx = max_t - 1
+    except Exception:
+        local_idx = 0
+    fig_aviso, fig_SST, fig_SSS = cur_mainfigs.update_satellite_figures(prof_loc, local_idx, trans_lines, cur_date_str)
 
     show_all = isinstance(show_all_value, list) and ('all' in show_all_value)
     if show_all:
@@ -208,11 +329,11 @@ def update_satellite_figures(prof_loc, date_idx, trans_lines, show_all_value, se
 
     # Single mode: put the selected field in first slot
     if selected_field == 'AVISO':
-        return [fig_aviso, mainfigs_obj.make_figure(np.nan*np.zeros_like(mainfigs_obj.SST[0]), go.Scatter(), cm.curl, '', '', '', None, None), mainfigs_obj.make_figure(np.nan*np.zeros_like(mainfigs_obj.SSS[0]), go.Scatter(), cm.curl, '', '', '', None, None)]
+        return [fig_aviso, cur_mainfigs.make_figure(np.nan*np.zeros_like(cur_mainfigs.SST[0]), go.Scatter(), cm.curl, '', '', '', None, None), cur_mainfigs.make_figure(np.nan*np.zeros_like(cur_mainfigs.SSS[0]), go.Scatter(), cm.curl, '', '', '', None, None)]
     if selected_field == 'SST':
-        return [fig_SST, mainfigs_obj.make_figure(np.nan*np.zeros_like(mainfigs_obj.SST[0]), go.Scatter(), cm.curl, '', '', '', None, None), mainfigs_obj.make_figure(np.nan*np.zeros_like(mainfigs_obj.SSS[0]), go.Scatter(), cm.curl, '', '', '', None, None)]
+        return [fig_SST, cur_mainfigs.make_figure(np.nan*np.zeros_like(cur_mainfigs.SST[0]), go.Scatter(), cm.curl, '', '', '', None, None), cur_mainfigs.make_figure(np.nan*np.zeros_like(cur_mainfigs.SSS[0]), go.Scatter(), cm.curl, '', '', '', None, None)]
     if selected_field == 'SSS':
-        return [fig_SSS, mainfigs_obj.make_figure(np.nan*np.zeros_like(mainfigs_obj.SST[0]), go.Scatter(), cm.curl, '', '', '', None, None), mainfigs_obj.make_figure(np.nan*np.zeros_like(mainfigs_obj.SSS[0]), go.Scatter(), cm.curl, '', '', '', None, None)]
+        return [fig_SSS, cur_mainfigs.make_figure(np.nan*np.zeros_like(cur_mainfigs.SST[0]), go.Scatter(), cm.curl, '', '', '', None, None), cur_mainfigs.make_figure(np.nan*np.zeros_like(cur_mainfigs.SSS[0]), go.Scatter(), cm.curl, '', '', '', None, None)]
     return [fig_aviso, fig_SST, fig_SSS]
 
 
@@ -223,11 +344,11 @@ def update_satellite_figures(prof_loc, date_idx, trans_lines, show_all_value, se
     Output('fig_sal', 'figure'),
     Input('prof_loc', 'data'),
     Input('cur_date', 'data'),
+    Input('cur_date_str', 'data'),
     Input('trans_lines', 'data'),
     Input('depth_idx', 'value'),
-    State('cur_date_str', 'data'),
 )
-def update_nespreso_figures(prof_loc, date_idx, trans_lines, depth_idx, cur_date_str):
+def update_nespreso_figures(prof_loc, date_idx, cur_date_str, trans_lines, depth_idx):
     print(f"update_nespreso_figures -> date_idx={date_idx}, depth_idx={depth_idx}, prof_loc_len={0 if not prof_loc else len(prof_loc)}")
     # Guards
     if date_idx is None:
@@ -237,8 +358,18 @@ def update_nespreso_figures(prof_loc, date_idx, trans_lines, depth_idx, cur_date
     # If trans_lines is
     if trans_lines is None:
         trans_lines = []
-
-    fig_temp, fig_sal = mainfigs_obj.update_nespreso_maps(prof_loc, date_idx, depth_idx, trans_lines, cur_date_str)
+    date_key = cur_date_str if isinstance(cur_date_str, str) and len(cur_date_str) == 10 else start_date
+    cur_mainfigs, _, _ = get_objs_for_date(date_key)
+    try:
+        max_t = max(cur_mainfigs.temp.shape[0], cur_mainfigs.sal.shape[0])
+        local_idx = int(date_idx) if date_idx is not None else 0
+        if local_idx < 0:
+            local_idx = 0
+        if local_idx >= max_t:
+            local_idx = max_t - 1
+    except Exception:
+        local_idx = 0
+    fig_temp, fig_sal = cur_mainfigs.update_nespreso_maps(prof_loc, local_idx, depth_idx, trans_lines, cur_date_str)
     return [fig_temp, fig_sal]
 
 # =================== Satellite layout visibility ===================
@@ -284,19 +415,31 @@ def toggle_transect_instructions(trans_lines):
     Output('fig_temp_prof', 'figure'),
     Output('fig_sal_prof', 'figure'),
     Input('cur_date', 'data'),
+    Input('cur_date_str', 'data'),
     Input('prof_loc', 'data'),
     Input('depth_selection', 'value'),
     Input('depth_idx', 'value'),
-    State('cur_date_str', 'data'),
 )
-def update_profiles(date_idx, prof_loc, depth_type, depth_idx, cur_date_str):
+def update_profiles(date_idx, cur_date_str, prof_loc, depth_type, depth_idx):
     print(f"update_profiles -> date_idx={date_idx}, depth_type={depth_type}, depth_idx={depth_idx}, prof_loc_len={0 if not prof_loc else len(prof_loc)}")
     if date_idx is None:
         date_idx = 0
     if depth_idx is None:
         depth_idx = 0
 
-    fig_temp_prof, fig_sal_prof = prof_obj.update_profiles(prof_loc, date_idx, 
+    date_key = cur_date_str if isinstance(cur_date_str, str) and len(cur_date_str) == 10 else start_date
+    _, cur_prof, _ = get_objs_for_date(date_key)
+    # Clamp date index to available range
+    try:
+        max_t = max(cur_prof.temp.shape[0], cur_prof.sal.shape[0])
+        local_idx = int(date_idx) if date_idx is not None else 0
+        if local_idx < 0:
+            local_idx = 0
+        if local_idx >= max_t:
+            local_idx = max_t - 1
+    except Exception:
+        local_idx = 0
+    fig_temp_prof, fig_sal_prof = cur_prof.update_profiles(prof_loc, local_idx, 
                                                            depth_type, cur_date_str, 
                                                            depth_idx) 
 
@@ -308,19 +451,52 @@ def update_profiles(date_idx, prof_loc, depth_type, depth_idx, cur_date_str):
     Output('fig_temp_trans', 'figure'),
     Output('fig_sal_trans', 'figure'),
     Input('cur_date', 'data'),
+    Input('cur_date_str', 'data'),
     Input('trans_lines', 'data'),
     Input('depth_selection', 'value'),
-    State('cur_date_str', 'data'),
 )
-def update_trans(date_idx, cur_transect, depth_type, cur_date_str):
+def update_trans(date_idx, cur_date_str, cur_transect, depth_type):
     if cur_transect != []:
         x0, y0 = cur_transect['x0'], cur_transect['y0']
         x1, y1 = cur_transect['x1'], cur_transect['y1']
 
         transect_loc = [[y0, x0], [y1, x1]]
-        return trans_obj.update_transects(transect_loc, date_idx, depth_type, cur_date_str)
+        date_key = cur_date_str if isinstance(cur_date_str, str) and len(cur_date_str) == 10 else start_date
+        _, _, cur_trans = get_objs_for_date(date_key)
+        # Clamp date index
+        try:
+            max_t = int(cur_trans.temp.sizes.get('time', 1))
+            local_idx = int(date_idx) if date_idx is not None else 0
+            if local_idx < 0:
+                local_idx = 0
+            if local_idx >= max_t:
+                local_idx = max_t - 1
+        except Exception:
+            local_idx = 0
+        return cur_trans.update_transects(transect_loc, local_idx, depth_type, cur_date_str)
     else:  # Prevent update
         raise dash.exceptions.PreventUpdate
+
+# =================== UI visibility helpers ===================
+@app.callback(
+    Output('sat_field_selector_container', 'style'),
+    Input('show_all_sat', 'value'),
+)
+def toggle_field_selector_visibility(show_all_value):
+    show_all = isinstance(show_all_value, list) and ('all' in show_all_value)
+    return ({'display': 'none'} if show_all else {})
+
+@app.callback(
+    Output('nespreso-date', 'children'),
+    Input('cur_date_str', 'data'),
+)
+def update_title(cur_date_str):
+    try:
+        dt = datetime.strptime(cur_date_str, '%Y-%m-%d')
+        label = dt.strftime("%b %d, %Y")
+    except Exception:
+        label = cur_date_str
+    return f"Satellite fields for {label}"
 
 
 if __name__ == '__main__':

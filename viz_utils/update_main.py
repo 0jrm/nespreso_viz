@@ -3,6 +3,8 @@ import plotly.graph_objs as go
 import cmocean.cm as cm
 import xarray as xr
 from viz_utils.styles import NespresoStyles
+import os
+import json
 try:
     import cartopy.feature as cfeature
     from cartopy.io import shapereader as shpreader
@@ -62,8 +64,11 @@ class MainFigures:
         self.styles = styles
 
         # Pre-compute coastline traces for the default bbox
-        self.bbox = dict(lon_min=-99, lon_max=-81, lat_min=18, lat_max=30)
-        self.coastline_traces = self._generate_coastline_traces(self.bbox)
+        self.bbox = dict(lon_min=-102, lon_max=-78, lat_min=17, lat_max=31)
+        # Prefer local prebaked coastlines if available for reliability (no runtime downloads)
+        self.coastline_traces = self._load_prebaked_coastlines(self.bbox)
+        if not self.coastline_traces:
+            self.coastline_traces = self._generate_coastline_traces(self.bbox)
 
         # Calculate pressure for first 200 mts
         # th = 100
@@ -78,7 +83,7 @@ class MainFigures:
             x=self.lons,
             y=self.lats,
             hovertemplate=hovertemplate,
-            colorbar=dict(title={'text': colorbar_title, 'side': 'right'}, thickness=14, lenmode='fraction', len=0.9),
+            colorbar=dict(title={'text': colorbar_title, 'side': 'right'}, thickness=14, lenmode='fraction', len=0.85, y=0.5, x=1.02),
             zmin=zmin,
             zmax=zmax,
         )
@@ -104,8 +109,8 @@ class MainFigures:
             data=traces,
             layout=go.Layout(
                 title=title,
-                xaxis=dict(title="Longitude", range=[-99, -81]),
-                yaxis=dict(title="Latitude", range=[18, 30]),
+                xaxis=dict(title="Longitude", range=[self.bbox['lon_min'], self.bbox['lon_max']], constrain='domain'),
+                yaxis=dict(title="Latitude", range=[self.bbox['lat_min'], self.bbox['lat_max']], scaleanchor='x', scaleratio=1, constrain='domain'),
                 dragmode="pan",
                 height=self.styles.fig_height,
                 margin=self.styles.margins,
@@ -232,6 +237,72 @@ class MainFigures:
                             traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                 except Exception:
                     pass
+
+            return traces
+        except Exception:
+            return []
+
+    def _load_prebaked_coastlines(self, bbox):
+        """
+        Load coastline lines from a local GeoJSON file if present.
+        This avoids runtime dependencies on Cartopy shapefile downloads and works offline.
+
+        Expected file: a FeatureCollection of LineString/MultiLineString in lon/lat.
+        The file path can be overridden via COASTLINE_FILE env var; default under assets/.
+        """
+        try:
+            default_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'coastline_gom_50m.json')
+            json_path = os.environ.get('COASTLINE_FILE', default_path)
+            if not os.path.exists(json_path):
+                return []
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            features = data.get('features', []) if isinstance(data, dict) else []
+            if not features:
+                return []
+
+            lon_min, lon_max = bbox['lon_min'], bbox['lon_max']
+            lat_min, lat_max = bbox['lat_min'], bbox['lat_max']
+            traces = []
+
+            def within(p):
+                x, y = p
+                return (lon_min - 1e-6) <= x <= (lon_max + 1e-6) and (lat_min - 1e-6) <= y <= (lat_max + 1e-6)
+
+            for feat in features:
+                geom = feat.get('geometry', {})
+                gtype = geom.get('type')
+                coords = geom.get('coordinates', [])
+                if gtype == 'LineString':
+                    xs = []
+                    ys = []
+                    for x, y in coords:
+                        if within((x, y)):
+                            xs.append(x)
+                            ys.append(y)
+                        else:
+                            # break segments at bbox boundaries for visual clarity
+                            if xs:
+                                traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                                xs, ys = [], []
+                    if xs:
+                        traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                elif gtype == 'MultiLineString':
+                    for line in coords:
+                        xs = []
+                        ys = []
+                        for x, y in line:
+                            if within((x, y)):
+                                xs.append(x)
+                                ys.append(y)
+                            else:
+                                if xs:
+                                    traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                                    xs, ys = [], []
+                        if xs:
+                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                else:
+                    continue
 
             return traces
         except Exception:

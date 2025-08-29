@@ -4,6 +4,11 @@ import numpy as np
 import cmocean.cm as cm
 import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output, State
+import os
+try:
+    import dash_mantine_components as dmc
+except Exception:
+    dmc = None
 from datetime import datetime
 
 # /doc 
@@ -30,7 +35,7 @@ class NespresoStyles:
     fig_height = 300
     margins = dict(
         l=0,  # left margin
-        r=0,  # right margin
+        r=60,  # right margin to accommodate colorbar
         b=0,  # bottom margin
         t=30,  # top margin
         pad=0  # padding
@@ -85,17 +90,77 @@ class NespresoStyles:
 
     def default_layout(self):
         selected_date_str = self.selected_date.strftime("%b %d, %Y")
+        # Optionally compute disabled days (disabled for now to avoid heavy payloads)
+        disabled_days = []
+        # Precompute default values
+        latest = max(self.days).astype('datetime64[D]').astype(str)
+        use_dmc = (dmc is not None) and (os.environ.get('USE_DMC_CAL', '0') == '1')
         layout = dbc.Container(fluid=True, children=[
+                # ------------------- Calendar at the very top -------------------
                 dbc.Row([
-                dbc.Col(html.H1(f"Satellite fields for {selected_date_str}", id='nespreso-date'), style={'textAlign': 'center'})
+                    dbc.Col(html.Span("Select data date (Year, Month, Day):", className="font-weight-bold"), width="auto"),
+                    dbc.Col(
+                        (
+                            dmc.DatePickerInput(
+                                id='date-picker-single',
+                                value=latest,
+                                minDate=min(self.days).astype('datetime64[D]').astype(str),
+                                maxDate=max(self.days).astype('datetime64[D]').astype(str),
+                                dropdownType='popover',
+                                clearable=False,
+                                valueFormat='YYYY-MM-DD',
+                                firstDayOfWeek=0,
+                                style={"minWidth":"260px"}
+                            )
+                            if use_dmc
+                            else html.Div([
+                                dcc.Dropdown(
+                                    id='calendar_year',
+                                    options=[
+                                        {'label': str(y), 'value': y}
+                                        for y in sorted(list({int(str(d).split('-')[0]) for d in self.days.astype('datetime64[D]')}))
+                                    ],
+                                    value=int(latest.split('-')[0]),
+                                    clearable=False,
+                                    style={"minWidth":"120px", "display":"inline-block", "marginRight":"8px"}
+                                ),
+                                dcc.Dropdown(
+                                    id='calendar_month',
+                                    options=[
+                                        {'label': name, 'value': m}
+                                        for m, name in [
+                                            (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
+                                            (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
+                                            (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December')
+                                        ]
+                                    ],
+                                    value=int(latest.split('-')[1]),
+                                    clearable=False,
+                                    style={"minWidth":"160px", "display":"inline-block", "marginRight":"8px"}
+                                ),
+                                dcc.DatePickerSingle(
+                                    id='date-picker-single',
+                                    calendar_orientation='vertical',
+                                    min_date_allowed=min(self.days).astype('datetime64[D]').astype(str),
+                                    max_date_allowed=max(self.days).astype('datetime64[D]').astype(str),
+                                    initial_visible_month=max(self.days).astype('datetime64[D]').astype(str),
+                                    date=latest,
+                                    clearable=False,
+                                ),
+                            ])
+                        )
+                    ),
                 ]),
-                # Include a Row with a calendar picker
+
+                dbc.Row([
+                    dbc.Col(html.H1(f"Satellite fields for {selected_date_str}", id='nespreso-date'), style={'textAlign': 'center'})
+                ]),
                 # ------------------- Top row of figures (Satellite primary)-------------------
                 dbc.Row([
                     dbc.Col(
                         [
                         dbc.Row([
-                            dbc.Col(html.P("Satellite display:"), width=4),
+                            dbc.Col(html.P("Satellite display:"), width="auto"),
                             dbc.Col(
                                 dbc.Checklist(
                                     id='show_all_sat',
@@ -103,36 +168,25 @@ class NespresoStyles:
                                     value=[],
                                     switch=True
                                 ),
-                                width=8
+                                width="auto"
                             ),
-                        ]),
-                        dbc.Row([
-                            dbc.Col(html.P("Field:"), width=3),
                             dbc.Col(
-                                dcc.Dropdown(
-                                    id='sat_field_selector',
-                                    options=[
-                                        {'label': 'CMEMS ADT', 'value': 'AVISO'},
-                                        {'label': 'OISST SST', 'value': 'SST'},
-                                        {'label': 'SMAP SSS', 'value': 'SSS'},
-                                    ],
-                                    value='AVISO',
-                                    clearable=False
-                                ),
-                                width=9
+                                html.Div([
+                                    html.Span("Field:", style={"marginRight":"6px"}),
+                                    dcc.Dropdown(
+                                        id='sat_field_selector',
+                                        options=[
+                                            {'label': 'CMEMS ADT', 'value': 'AVISO'},
+                                            {'label': 'OISST SST', 'value': 'SST'},
+                                            {'label': 'SMAP SSS', 'value': 'SSS'},
+                                        ],
+                                        value='AVISO',
+                                        clearable=False,
+                                        style={"minWidth":"180px"}
+                                    )
+                                ], id='sat_field_selector_container'),
+                                width="auto"
                             ),
-                        ]),
-                        dbc.Row([
-                            dbc.Col(dcc.DatePickerSingle(
-                                id='date-picker-single',
-                                calendar_orientation='vertical',
-                                # Restrict date selection to March 1st to April 30th 2024
-                                min_date_allowed=min(self.days).astype('datetime64[D]').astype(str),
-                                max_date_allowed=max(self.days).astype('datetime64[D]').astype(str),
-                                date=min(self.days).astype('datetime64[D]').astype(str),
-                                clearable=True,
-                                with_portal=True,
-                            )),
                         ]),
                         dbc.Row([
                             dbc.Col(
@@ -146,19 +200,16 @@ class NespresoStyles:
                             ),
                         ], style={'display': 'none'})
                         ], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_aviso', figure=self.def_figure, config=self.def_config), xl=3, lg=4, md=6),
-                    dbc.Col([], xl=7, lg=5, md=2),
+                    dbc.Col(dcc.Graph(id='fig_aviso', figure=self.def_figure, config=self.def_config), xl=10, lg=9, md=8),
                     dcc.Store(id='prof_loc', data=[]),
                     dcc.Store(id='cur_date', data=0),
-                    dcc.Store(id='cur_date_str', data=selected_date_str),
+                    dcc.Store(id='cur_date_str', data=max(self.days).astype('datetime64[D]').astype(str)),
                     dcc.Store(id='trans_lines', data=[]),
                 ]),
                 # ------------------- Second row of satellite figures (secondary maps) -------------------
                 dbc.Row([
-                    dbc.Col([], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_SST',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_SSS',  figure=self.def_figure, config=self.def_config),   xl=3, lg=4, md=6),
-                    dbc.Col([], xl=4, lg=1, md=0),
+                    dbc.Col(dcc.Graph(id='fig_SST',  figure=self.def_figure, config=self.def_config),   xl=6, lg=6, md=6),
+                    dbc.Col(dcc.Graph(id='fig_SSS',  figure=self.def_figure, config=self.def_config),   xl=6, lg=6, md=6),
                 ]),
                 # ------------------- Line separator  -------------------
                 dbc.Row([
@@ -166,7 +217,7 @@ class NespresoStyles:
                 ]),
                 # ------------------- Depth slider row (below title) -------------------
                 dbc.Row([
-                    dbc.Col(html.Div("Display depth:", className="text-right font-weight-bold"), xl=2, lg=3, md=4),
+                    dbc.Col(html.Div("Display depth:", className="font-weight-bold"), width="auto"),
                     dbc.Col(dcc.Slider(
                         id='depth_idx',
                         min=0,
@@ -176,15 +227,12 @@ class NespresoStyles:
                         marks={0: '0', 500: '500', 1000: '1000', 1800: '1800'},
                         tooltip={"placement": "bottom", "always_visible": True},
                         className='small-slider'
-                    ), xl=3, lg=4, md=6),
-                    dbc.Col([], xl=7, lg=5, md=2),
+                    ), width=10),
                 ]),
                 # ------------------- NeSPReSO maps (match satellite sizes) -------------------
                 dbc.Row([
-                    dbc.Col([], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_temp', figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_sal',  figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
-                    dbc.Col([], xl=4, lg=1, md=0),
+                    dbc.Col(dcc.Graph(id='fig_temp', figure=self.def_figure, config=self.trans_config), xl=6, lg=6, md=6),
+                    dbc.Col(dcc.Graph(id='fig_sal',  figure=self.def_figure, config=self.trans_config), xl=6, lg=6, md=6),
                 ]),
                 # ------------------- Transect controls and plots -------------------
                 dbc.Row([
@@ -203,17 +251,14 @@ class NespresoStyles:
                     )
                 ]),
                 dbc.Row([
-                    dbc.Col([], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_temp_trans', figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_sal_trans',  figure=self.def_figure, config=self.trans_config), xl=3, lg=4, md=6),
-                    dbc.Col([], xl=4, lg=1, md=0),
+                    dbc.Col(dcc.Graph(id='fig_temp_trans', figure=self.def_figure, config=self.trans_config), xl=6, lg=6, md=6),
+                    dbc.Col(dcc.Graph(id='fig_sal_trans',  figure=self.def_figure, config=self.trans_config), xl=6, lg=6, md=6),
                 ]),
                 # ------------------- Depth options between transect and profile -------------------
                 dbc.Row([
-                    dbc.Col([], xl=2, lg=3, md=4),
                     dbc.Col([
                         dbc.Row([
-                            dbc.Col(html.P("Depth options:"), width=3),
+                            dbc.Col(html.P("Depth options (transect and profile views):"), width=3),
                             dbc.Col(dcc.Dropdown(
                                 id='depth_selection',
                                 options=[
@@ -229,8 +274,7 @@ class NespresoStyles:
                                 clearable=False
                             ), width=9)
                         ])
-                    ], xl=8, lg=9, md=8),
-                    dbc.Col([], xl=2, lg=0, md=0)
+                    ], xl=12, lg=12, md=12),
                 ]),
                 # ------------------- Profile controls and plots -------------------
                 dbc.Row([
@@ -249,10 +293,8 @@ class NespresoStyles:
                     )
                 ]),
                 dbc.Row([
-                    dbc.Col([], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_temp_prof', figure=self.def_figure,config=self.trans_config),  xl=3, lg=4, md=6),
-                    dbc.Col(dcc.Graph(id='fig_sal_prof', figure=self.def_figure,config=self.prof_config),    xl=3, lg=4, md=6),
-                    dbc.Col([], xl=4, lg=1, md=0),
+                    dbc.Col(dcc.Graph(id='fig_temp_prof', figure=self.def_figure,config=self.trans_config),  xl=6, lg=6, md=6),
+                    dbc.Col(dcc.Graph(id='fig_sal_prof', figure=self.def_figure,config=self.prof_config),    xl=6, lg=6, md=6),
                 ]),
                 # ------------------- Additional metrics (removed MLD) -------------------
                 dbc.Row([]),

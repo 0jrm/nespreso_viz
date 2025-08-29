@@ -1,6 +1,7 @@
 # Core web framework and UI components
 dash>=2.14.0
 dash-bootstrap-components>=1.5.0
+dash-mantine-components>=0.14.0
 
 # Data handling and scientific computing
 xarray>=2023.1.0
