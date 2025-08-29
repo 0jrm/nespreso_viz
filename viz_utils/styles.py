@@ -130,7 +130,16 @@ class NespresoStyles:
                                         html.Div([
                                             html.Span("NeSPReSO (Neural Synthetic Profiles from Remote Sensing and Observations)", className="citation-text", style={'fontSize': '30px'}),
                                             html.Br(),
-                                            html.Span("Miranda et al., 2025, Ocean Modelling. DOI: https://doi.org/10.1016/j.ocemod.2025.102550", className="citation-text")
+                                            html.Span([
+                                                "Miranda et al., 2025, Ocean Modelling. ",
+                                                html.A(
+                                                    "DOI: 10.1016/j.ocemod.2025.102550",
+                                                    href="https://doi.org/10.1016/j.ocemod.2025.102550",
+                                                    target="_blank",
+                                                    rel="noopener noreferrer",
+                                                    className="citation-text"
+                                                )
+                                            ], className="citation-text")
                                         ]),
                                         align='center'
                                     ),
