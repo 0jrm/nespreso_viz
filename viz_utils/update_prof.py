@@ -22,7 +22,13 @@ class Profiles:
         # ================================ Profiles ====================================
 
         if not prof_loc:
-            def_fig = go.Figure(layout=go.Layout(height=self.styles.fig_height, margin=self.styles.margins))
+            def_fig = go.Figure(layout=go.Layout(
+                height=self.styles.fig_height,
+                margin=self.styles.margins,
+                paper_bgcolor=self.styles.paper_bgcolor,
+                plot_bgcolor=self.styles.plot_bgcolor,
+                font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base'])
+            ))
             fig_temp_prof = def_fig
             fig_sal_prof = def_fig
         else:
@@ -71,12 +77,15 @@ class Profiles:
                 ))
             
             fig_temp_prof.update_layout(
-                title=f"Synthetic T Profiles",
-                xaxis=dict(title="Temperature (°C)"),
-                yaxis=dict(title="Depth (m)", autorange="reversed"),
+                title=dict(text=f"Synthetic T Profiles", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['title']), y=0.98),
+                xaxis=dict(title=dict(text="Temperature (°C)", font=dict(size=self.styles.font_sizes['axis_title'])), tickfont=dict(size=self.styles.font_sizes['tick'])),
+                yaxis=dict(title=dict(text="Depth (m)", font=dict(size=self.styles.font_sizes['axis_title'])), autorange="reversed", tickfont=dict(size=self.styles.font_sizes['tick'])),
                 dragmode="pan",
                 height=int(self.styles.fig_height*1.1),  
-                margin=self.styles.margins,  
+                margin=dict(l=self.styles.margins['l'], r=20, t=self.styles.margins['t'], b=self.styles.margins['b'], pad=0),
+                paper_bgcolor=self.styles.paper_bgcolor,
+                plot_bgcolor=self.styles.plot_bgcolor,
+                font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base'])
             )
             # --------------- Salinity profile -------------------
             fig_sal_prof = go.Figure()
@@ -118,12 +127,15 @@ class Profiles:
                 )
 
             fig_sal_prof.update_layout(
-                title=f"Synthetic S Profiles",
-                xaxis=dict(title="Salinity (PSU)"),
-                yaxis=dict(title="Depth (m)", autorange="reversed"),
+                title=dict(text=f"Synthetic S Profiles", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['title']), y=0.98),
+                xaxis=dict(title=dict(text="Salinity (PSU)", font=dict(size=self.styles.font_sizes['axis_title'])), tickfont=dict(size=self.styles.font_sizes['tick'])),
+                yaxis=dict(title=dict(text="Depth (m)", font=dict(size=self.styles.font_sizes['axis_title'])), autorange="reversed", tickfont=dict(size=self.styles.font_sizes['tick'])),
                 dragmode="pan",
                 height=int(self.styles.fig_height*1.1),  
-                margin=self.styles.margins,  
+                margin=dict(l=self.styles.margins['l'], r=20, t=self.styles.margins['t'], b=self.styles.margins['b'], pad=0),
+                paper_bgcolor=self.styles.paper_bgcolor,
+                plot_bgcolor=self.styles.plot_bgcolor,
+                font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base'])
             )
         
         return [fig_temp_prof, fig_sal_prof]

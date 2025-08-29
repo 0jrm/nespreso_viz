@@ -37,6 +37,17 @@ class Transects:
         return c * r
 
     def update_transects(self, transect_loc, date_idx, depth_type, cur_date_str):
+        # Guard for empty or malformed transect
+        if not transect_loc or len(transect_loc) < 2:
+            def_fig = go.Figure(layout=go.Layout(
+                height=self.styles.fig_height,
+                margin=self.styles.margins,
+                paper_bgcolor=self.styles.paper_bgcolor,
+                plot_bgcolor=self.styles.plot_bgcolor,
+                font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base'])
+            ))
+            return [def_fig, def_fig]
+
         x0 = transect_loc[0][1]
         y0 = transect_loc[0][0]
         x1 = transect_loc[1][1]
@@ -48,7 +59,7 @@ class Transects:
         
         # Determine the number of points based on the resolution
         resolution = self.res
-        num_points = int(line_length / resolution)
+        num_points = max(int(line_length / resolution), 2)
         
         # Interpolating points along the line
         lons = np.linspace(x0, x1, num_points)
@@ -72,47 +83,64 @@ class Transects:
         sal_time_selected = self.sal.isel(time=date_idx, depth=depth_idx)
         sal_interp = sal_time_selected.interp(lat=('points', lats), lon=('points', lons))
 
-        if not transect_loc:
-            def_fig = go.Figure(layout=go.Layout(height=self.styles.fig_height, margin=self.styles.margins))
-            fig_temp_trans = def_fig
-            fig_sal_trans = def_fig
+        if line_length <= 0 or num_points < 2:
+            def_fig = go.Figure(layout=go.Layout(
+                height=self.styles.fig_height,
+                margin=self.styles.margins,
+                paper_bgcolor=self.styles.paper_bgcolor,
+                plot_bgcolor=self.styles.plot_bgcolor,
+                font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base'])
+            ))
+            return [def_fig, def_fig]
         else:
             # --------------- TEMP Transect -------------------
         # zoom, pan, select, lasso, orbit, turntable, zoomInGeo, zoomOutGeo, autoScale2d, resetScale2d, hoverClosestCartesian, hoverClosestGeo, hoverClosestGl2d, hoverClosestPie, toggleHover, resetViews, toggleSpikelines, resetViewMapbox
 
             # Temperature
             fig_temp_trans = go.Figure(
-                data=[go.Heatmap(z=np.rot90(temp_interp, 2), 
-                                 x=dist[::-1],
-                                 y=temp_interp.depth.values[::-1],
-                                 colorscale=self.styles.cmocean_to_plotly(cm.thermal,256), 
-                                 hovertemplate='Temp: %{z:.1f} °C<extra></extra>',
-                                 showscale=True,
-                                 colorbar=dict(title='Temperature [°C]'))], 
-                layout=go.Layout(title=f"Synthetic T Transect", 
-                                 xaxis=dict(title="Distance (km)"),
-                                 yaxis=dict(title="Depth (m)", autorange="reversed"),
-                                 dragmode="pan", 
-                                 height=int(self.styles.fig_height*1.1),
-                                 margin=self.styles.margins,
-                             ),
+                data=[go.Heatmap(
+                    z=np.rot90(temp_interp, 2), 
+                    x=dist[::-1],
+                    y=temp_interp.depth.values[::-1],
+                    colorscale=self.styles.cmocean_to_plotly(cm.thermal,256), 
+                    hovertemplate='Temp: %{z:.1f} °C<extra></extra>',
+                    showscale=True,
+                    colorbar=dict(title={'text':'Temperature [°C]','side':'right'}, thickness=12, lenmode='fraction', len=0.88, y=0.5, x=1.0, xpad=0)
+                )], 
+                layout=go.Layout(
+                    title=dict(text=f"Synthetic T Transect", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['title']), y=0.98),
+                    xaxis=dict(title=dict(text="Distance (km)", font=dict(size=self.styles.font_sizes['axis_title'])), tickfont=dict(size=self.styles.font_sizes['tick']), showgrid=True, gridcolor='rgba(0,0,0,0.18)', gridwidth=1, layer='above traces'),
+                    yaxis=dict(title=dict(text="Depth (m)", font=dict(size=self.styles.font_sizes['axis_title'])), autorange="reversed", tickfont=dict(size=self.styles.font_sizes['tick']), showgrid=True, gridcolor='rgba(0,0,0,0.18)', gridwidth=1, layer='above traces'),
+                    dragmode="pan", 
+                    height=int(self.styles.fig_height*1.1),
+                    margin=self.styles.margins,
+                    paper_bgcolor=self.styles.paper_bgcolor,
+                    plot_bgcolor=self.styles.plot_bgcolor,
+                    font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base'])
+                ),
             )
 
             # Salinity
             fig_sal_trans = go.Figure(
-                data=[go.Heatmap(z=np.rot90(sal_interp, 2),
-                                 x=dist[::-1],
-                                 y=temp_interp.depth.values[::-1],
-                                 colorscale=self.styles.cmocean_to_plotly(cm.haline,256), 
-                                 hovertemplate='Sal: %{z:.1f} PSU<extra></extra>',
-                                 showscale=True,
-                                 colorbar=dict(title='Salinity [PSU]'))], 
-                layout=go.Layout(title=f"Synthetic S Transect", 
-                                 xaxis=dict(title="Distance (km)"),
-                                 yaxis=dict(title="Depth (m)", autorange="reversed"),
-                                 dragmode="pan", 
-                                 height=int(self.styles.fig_height*1.1),
-                                 margin=self.styles.margins,
-                             ),
+                data=[go.Heatmap(
+                    z=np.rot90(sal_interp, 2),
+                    x=dist[::-1],
+                    y=temp_interp.depth.values[::-1],
+                    colorscale=self.styles.cmocean_to_plotly(cm.haline,256), 
+                    hovertemplate='Sal: %{z:.1f} PSU<extra></extra>',
+                    showscale=True,
+                    colorbar=dict(title={'text':'Salinity [PSU]','side':'right'}, thickness=12, lenmode='fraction', len=0.88, y=0.5, x=1.0, xpad=0)
+                )], 
+                layout=go.Layout(
+                    title=dict(text=f"Synthetic S Transect", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['title']), y=0.98),
+                    xaxis=dict(title=dict(text="Distance (km)", font=dict(size=self.styles.font_sizes['axis_title'])), tickfont=dict(size=self.styles.font_sizes['tick']), showgrid=True, gridcolor='rgba(0,0,0,0.18)', gridwidth=1, layer='above traces'),
+                    yaxis=dict(title=dict(text="Depth (m)", font=dict(size=self.styles.font_sizes['axis_title'])), autorange="reversed", tickfont=dict(size=self.styles.font_sizes['tick']), showgrid=True, gridcolor='rgba(0,0,0,0.18)', gridwidth=1, layer='above traces'),
+                    dragmode="pan", 
+                    height=int(self.styles.fig_height*1.1),
+                    margin=self.styles.margins,
+                    paper_bgcolor=self.styles.paper_bgcolor,
+                    plot_bgcolor=self.styles.plot_bgcolor,
+                    font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base'])
+                ),
             ) 
             return [fig_temp_trans, fig_sal_trans] 

@@ -83,7 +83,7 @@ class MainFigures:
             x=self.lons,
             y=self.lats,
             hovertemplate=hovertemplate,
-            colorbar=dict(title={'text': colorbar_title, 'side': 'right'}, thickness=14, lenmode='fraction', len=0.85, y=0.5, x=1.02),
+            colorbar=dict(title={'text': colorbar_title, 'side': 'right'}, thickness=12, lenmode='fraction', len=0.88, y=0.5, x=1.0, xpad=0),
             zmin=zmin,
             zmax=zmax,
         )
@@ -108,13 +108,33 @@ class MainFigures:
         cur_fig = go.Figure(
             data=traces,
             layout=go.Layout(
-                title=title,
-                xaxis=dict(title="Longitude", range=[self.bbox['lon_min'], self.bbox['lon_max']], constrain='domain'),
-                yaxis=dict(title="Latitude", range=[self.bbox['lat_min'], self.bbox['lat_max']], scaleanchor='x', scaleratio=1, constrain='domain'),
+                title=dict(text=title, font=dict(family=self.styles.font_family, size=self.styles.font_sizes['title']), y=0.98),
+                xaxis=dict(
+                    title=dict(text="Longitude", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['axis_title'])),
+                    tickfont=dict(size=self.styles.font_sizes['tick']),
+                    range=[self.bbox['lon_min'], self.bbox['lon_max']],
+                    constrain='domain',
+                    gridcolor='rgba(0,0,0,0.05)',
+                    zeroline=False,
+                    linecolor='rgba(0,0,0,0.15)'
+                ),
+                yaxis=dict(
+                    title=dict(text="Latitude", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['axis_title'])),
+                    tickfont=dict(size=self.styles.font_sizes['tick']),
+                    range=[self.bbox['lat_min'], self.bbox['lat_max']],
+                    scaleanchor='x', scaleratio=1, constrain='domain',
+                    gridcolor='rgba(0,0,0,0.05)',
+                    zeroline=False,
+                    linecolor='rgba(0,0,0,0.15)'
+                ),
                 dragmode="pan",
                 height=self.styles.fig_height,
                 margin=self.styles.margins,
-                shapes=[]
+                shapes=[],
+                paper_bgcolor=self.styles.paper_bgcolor,
+                plot_bgcolor=self.styles.plot_bgcolor,
+                font=dict(family=self.styles.font_family, size=self.styles.font_sizes['base']),
+                legend=dict(font=dict(size=self.styles.font_sizes['legend']))
             )
         )
 

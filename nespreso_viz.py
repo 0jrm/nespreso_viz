@@ -1,7 +1,7 @@
 #!/bin/env python3
 # /etc/httpd/conf/ozavala_custom_wsgi.conf
 import dash
-from dash import Input, Output, State
+from dash import Input, Output, State, html, dcc
 import plotly.graph_objs as go
 import cmocean.cm as cm
 import dash_bootstrap_components as dbc
@@ -16,6 +16,8 @@ from datetime import datetime
 import os
 import re
 from functools import lru_cache
+import base64
+import io
 
 # %% Make a basic dash interface to explore a NetCDF file
 
@@ -102,6 +104,17 @@ app.config.suppress_callback_exceptions = True
 
 # Create layout with three rows and specified figures
 app.layout = styles_obj.default_layout()
+# ------------------- About toggle -------------------
+@app.callback(
+    Output('about_collapse', 'is_open'),
+    Input('about_toggle', 'n_clicks'),
+    State('about_collapse', 'is_open'),
+    prevent_initial_call=True,
+)
+def toggle_about(n_clicks, is_open):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    return not is_open
 
 # =================== Date picker ===================
 # Updates the date and the index of the date
@@ -132,7 +145,7 @@ def update_calendar_store(selected_value, selected_date_legacy):
         date_idx = int(np.argmin(np.abs(dates - np.datetime64(selected_date))))
     print(f"Selected date index within available pool: {date_idx}")
 
-    return [f"NeSPReSO synthetics for {selected_date_str}", date_idx, selected_date]
+    return [html.Div(f"NeSPReSO synthetics for {selected_date_str}", style={'paddingLeft': '20px'}), date_idx, selected_date]
 
 # Fallback-only: sync Month/Year dropdowns with DatePicker and vice versa
 @app.callback(
@@ -246,12 +259,11 @@ def update_profiles_loc(n_clicks_clear, n_clicks_undo, clickData_aviso, clickDat
      Input('fig_SSS', 'relayoutData'),
      Input('fig_temp', 'relayoutData'),
      Input('fig_sal', 'relayoutData'),
-     Input('clear_transect', 'n_clicks'),
-     Input('undo_transect', 'n_clicks')],
+     Input('clear_transect', 'n_clicks')],
 )
-def update_transect_locations(relayout_data_aviso, relayout_data_temp, relayout_data_sal, relayout_data_temp_syn, relayout_data_sal_syn, n_clicks_clear, n_clicks_undo):
+def update_transect_locations(relayout_data_aviso, relayout_data_temp, relayout_data_sal, relayout_data_temp_syn, relayout_data_sal_syn, n_clicks_clear):
 
-    if not relayout_data_aviso and not relayout_data_temp and not relayout_data_sal and not relayout_data_temp_syn and not relayout_data_sal_syn and not n_clicks_clear and not n_clicks_undo:
+    if not relayout_data_aviso and not relayout_data_temp and not relayout_data_sal and not relayout_data_temp_syn and not relayout_data_sal_syn and not n_clicks_clear:
         raise dash.exceptions.PreventUpdate
 
     ctx = dash.callback_context
@@ -259,7 +271,7 @@ def update_transect_locations(relayout_data_aviso, relayout_data_temp, relayout_
         raise dash.exceptions.PreventUpdate
     trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
-    if trigger_id in ['clear_transect', 'undo_transect']:
+    if trigger_id in ['clear_transect']:
         return []
 
     relayout_data = None
@@ -337,7 +349,7 @@ def update_satellite_figures(prof_loc, date_idx, cur_date_str, trans_lines, show
     return [fig_aviso, fig_SST, fig_SSS]
 
 
-# =================== Nespresso maps figures ===================
+# =================== Nespreso maps figures ===================
 # Update figure based on selections or a default example
 @app.callback(
     Output('fig_temp', 'figure'),
@@ -456,7 +468,7 @@ def update_profiles(date_idx, cur_date_str, prof_loc, depth_type, depth_idx):
     Input('depth_selection', 'value'),
 )
 def update_trans(date_idx, cur_date_str, cur_transect, depth_type):
-    if cur_transect != []:
+    if cur_transect and isinstance(cur_transect, dict):
         x0, y0 = cur_transect['x0'], cur_transect['y0']
         x1, y1 = cur_transect['x1'], cur_transect['y1']
 
@@ -474,8 +486,11 @@ def update_trans(date_idx, cur_date_str, cur_transect, depth_type):
         except Exception:
             local_idx = 0
         return cur_trans.update_transects(transect_loc, local_idx, depth_type, cur_date_str)
-    else:  # Prevent update
-        raise dash.exceptions.PreventUpdate
+    else:
+        # Return empty/default figures when transect cleared
+        date_key = cur_date_str if isinstance(cur_date_str, str) and len(cur_date_str) == 10 else start_date
+        _, _, cur_trans = get_objs_for_date(date_key)
+        return cur_trans.update_transects([], 0, depth_type, cur_date_str)
 
 # =================== UI visibility helpers ===================
 @app.callback(
@@ -497,6 +512,48 @@ def update_title(cur_date_str):
     except Exception:
         label = cur_date_str
     return f"Satellite fields for {label}"
+
+# =================== Download functionality ===================
+@app.callback(
+    Output('btn-download', 'children'),
+    Input('cur_date_str', 'data'),
+)
+def update_download_button_text(cur_date_str):
+    if not cur_date_str:
+        return "Download NeSPReSO data"
+    try:
+        dt = datetime.strptime(cur_date_str, '%Y-%m-%d')
+        formatted_date = dt.strftime("%b %d, %Y")
+        return f"Download NeSPReSO data for {formatted_date}"
+    except Exception:
+        return "Download NeSPReSO data"
+
+@app.callback(
+    Output('download-dataframe-csv', 'data'),
+    Input('btn-download', 'n_clicks'),
+    State('cur_date_str', 'data'),
+    prevent_initial_call=True,
+)
+def download_file(n_clicks, cur_date_str):
+    if not n_clicks or not cur_date_str:
+        raise dash.exceptions.PreventUpdate
+    
+    # Get the file path for the selected date
+    file_path = DATE_TO_FILE.get(cur_date_str)
+    if not file_path or not os.path.exists(file_path):
+        raise dash.exceptions.PreventUpdate
+    
+    # Read the file and encode it
+    with open(file_path, 'rb') as f:
+        file_content = f.read()
+    
+    # Create the download data
+    filename = os.path.basename(file_path)
+    return dcc.send_bytes(
+        file_content,
+        filename=filename,
+        type='application/octet-stream'
+    )
 
 
 if __name__ == '__main__':
