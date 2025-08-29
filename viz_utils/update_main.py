@@ -6,12 +6,13 @@ from viz_utils.styles import NespresoStyles
 try:
     import cartopy.feature as cfeature
     from cartopy.io import shapereader as shpreader
-    from shapely.geometry import LineString, MultiLineString
+    from shapely.geometry import LineString, MultiLineString, box
 except Exception:  # Optional dependency; figures will still render without coastlines
     cfeature = None
     shpreader = None
     LineString = None
     MultiLineString = None
+    box = None
 # from viz_utils.ocean_utils import *
 
 class MainFigures:
@@ -115,25 +116,123 @@ class MainFigures:
         return cur_fig
 
     def _generate_coastline_traces(self, bbox):
-        if cfeature is None or shpreader is None:
+        if cfeature is None or shpreader is None or box is None:
             return []
         try:
-            shp_path = shpreader.natural_earth(resolution='50m', category='physical', name='coastline')
-            reader = shpreader.Reader(shp_path)
             traces = []
-            for geom in reader.geometries():
-                if isinstance(geom, (LineString,)):
-                    xs, ys = geom.xy
-                    # Quick bbox filter
-                    if max(xs) < bbox['lon_min'] or min(xs) > bbox['lon_max'] or max(ys) < bbox['lat_min'] or min(ys) > bbox['lat_max']:
+            clip_bbox = box(bbox["lon_min"], bbox["lat_min"], bbox["lon_max"], bbox["lat_max"])
+            def extract_lines(geom):
+                try:
+                    from shapely.geometry import LineString as _LS, MultiLineString as _MLS
+                except Exception:
+                    return []
+                if isinstance(geom, _LS):
+                    return [geom]
+                if isinstance(geom, _MLS):
+                    return list(geom.geoms)
+                if hasattr(geom, 'geoms'):
+                    lines = []
+                    for sub in geom.geoms:
+                        lines.extend(extract_lines(sub))
+                    return lines
+                return []
+            # First try the dedicated coastline lines
+            try:
+                shp_path = shpreader.natural_earth(resolution="50m", category="physical", name="coastline")
+                reader = shpreader.Reader(shp_path)
+                for geom in reader.geometries():
+                    try:
+                        inter = geom.intersection(clip_bbox)
+                    except Exception:
                         continue
-                    traces.append(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(color='black', width=1), hoverinfo='skip', showlegend=False))
-                elif isinstance(geom, MultiLineString):
-                    for line in geom.geoms:
+                    if inter.is_empty:
+                        continue
+                    geoms = extract_lines(inter)
+                    for line in geoms:
                         xs, ys = line.xy
-                        if max(xs) < bbox['lon_min'] or min(xs) > bbox['lon_max'] or max(ys) < bbox['lat_min'] or min(ys) > bbox['lat_max']:
+                        traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+            except Exception:
+                pass
+
+            # Alternate attempt: iterate records (sometimes different driver backends)
+            if not traces:
+                try:
+                    shp_path = shpreader.natural_earth(resolution="50m", category="physical", name="coastline")
+                    reader = shpreader.Reader(shp_path)
+                    for rec in reader.records():
+                        geom = rec.geometry
+                        try:
+                            inter = geom.intersection(clip_bbox)
+                        except Exception:
                             continue
-                        traces.append(go.Scattergl(x=xs, y=ys, mode='lines', line=dict(color='black', width=1), hoverinfo='skip', showlegend=False))
+                        if inter.is_empty:
+                            continue
+                        geoms = extract_lines(inter)
+                        for line in geoms:
+                            xs, ys = line.xy
+                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                except Exception:
+                    pass
+
+            # Fallback: extract land boundaries
+            if not traces:
+                try:
+                    land_path = shpreader.natural_earth(resolution="50m", category="physical", name="land")
+                    reader = shpreader.Reader(land_path)
+                    for geom in reader.geometries():
+                        try:
+                            inter = geom.intersection(clip_bbox)
+                        except Exception:
+                            continue
+                        if inter.is_empty:
+                            continue
+                        # Use boundary to draw coast-like lines
+                        boundary = inter.boundary
+                        if boundary.is_empty:
+                            continue
+                        for line in extract_lines(boundary):
+                            xs, ys = line.xy
+                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                except Exception:
+                    pass
+
+                # Fallback to coarser resolution if still empty
+                if not traces:
+                    try:
+                        land_path = shpreader.natural_earth(resolution="110m", category="physical", name="land")
+                        reader = shpreader.Reader(land_path)
+                        for geom in reader.geometries():
+                            try:
+                                inter = geom.intersection(clip_bbox)
+                            except Exception:
+                                continue
+                            if inter.is_empty:
+                                continue
+                            boundary = inter.boundary
+                            if boundary.is_empty:
+                                continue
+                            for line in extract_lines(boundary):
+                                xs, ys = line.xy
+                                traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                    except Exception:
+                        pass
+
+            # Last resort: use Cartopy's COASTLINE feature provider
+            if not traces:
+                try:
+                    for geom in cfeature.COASTLINE.geometries():
+                        try:
+                            inter = geom.intersection(clip_bbox)
+                        except Exception:
+                            continue
+                        if inter.is_empty:
+                            continue
+                        for line in extract_lines(inter):
+                            xs, ys = line.xy
+                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                except Exception:
+                    pass
+
             return traces
         except Exception:
             return []
@@ -151,7 +250,8 @@ class MainFigures:
                             size=10,
                             symbol='circle'
                         ),
-                        name='Profile Locations'
+                        name='Profile Locations',
+                        showlegend=False
                     )
 
         # -------------------------- AVISO -------------------------------
@@ -159,7 +259,7 @@ class MainFigures:
             self.aviso[date_idx, :, :],
             prof_locations,
             cm.curl,
-            f"AVISO",
+            f"CMEMS ADT",
             'Lat: %{y}<br>Lon: %{x}<br>ADT: %{z:.2f} m<extra></extra>',
             'ADT [m]'
         )
@@ -169,7 +269,7 @@ class MainFigures:
             np.round(self.SST[date_idx,:,:] - 273.15, 2),
             prof_locations,
             cm.thermal,
-            f"SST",
+            f"OISST SST",
             'Lat: %{y}<br>Lon: %{x}<br>Temp: %{z:.2f} °C<extra></extra>',
             'SST [°C]'
         )
@@ -178,7 +278,7 @@ class MainFigures:
             self.SSS[date_idx,:,:],
             prof_locations,
             cm.haline,
-            f"SSS",
+            f"SMAP SSS",
             'Lat: %{y}<br>Lon: %{x}<br>Salt: %{z:.2f} PSU<extra></extra>',
             'SSS [PSU]'
         )
@@ -219,7 +319,8 @@ class MainFigures:
                     size=10,
                     symbol='circle'
                 ),
-                name='Profile Locations'
+                name='Profile Locations',
+                showlegend=False
             )
 
         # -------------------------- Temp -------------------------------

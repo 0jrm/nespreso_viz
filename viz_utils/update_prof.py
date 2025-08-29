@@ -48,15 +48,30 @@ class Profiles:
                 lon_idx = np.argmin(np.abs(self.lons - lon))  # Use self.lons (numpy array)
                 temp_profiles.append(self.temp[date_idx, depth_idx, lat_idx, lon_idx])  # Use self.temp
                 salinity_profiles.append(self.sal[date_idx, depth_idx, lat_idx, lon_idx])  # Use self.sal
+            # Helper to convert hex color to RGBA with custom alpha for line styling
+            def hex_to_rgba(hex_color: str, alpha: float) -> str:
+                hex_color = hex_color.lstrip('#')
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                return f'rgba({r}, {g}, {b}, {alpha})'
+
             # --------------- Temp profile -------------------
             fig_temp_prof = go.Figure()
             for i, temp_profile in enumerate(temp_profiles):
-                fig_temp_prof.add_trace(go.Scatter(x=temp_profile, y=self.depths[depth_idx], mode='markers', 
-                                                   hovertemplate='Temp: %{x:.1f} °C, Depth %{y} m<extra></extra>',
-                                                   name=f'{loc_names[i]}', marker=dict(color=self.styles.colors[i])))  # Use self.depths and self.colors
+                base_color = self.styles.colors[i]
+                fig_temp_prof.add_trace(go.Scatter(
+                    x=temp_profile,
+                    y=self.depths[depth_idx],
+                    mode='lines+markers',
+                    hovertemplate='Temp: %{x:.1f} °C, Depth %{y} m<extra></extra>',
+                    name=f'{loc_names[i]}',
+                    marker=dict(color=base_color),
+                    line=dict(color=hex_to_rgba(base_color, 0.75), width=1)
+                ))
             
             fig_temp_prof.update_layout(
-                title=f"Temperature Profiles",
+                title=f"Synthetic T Profiles",
                 xaxis=dict(title="Temperature (°C)"),
                 yaxis=dict(title="Depth (m)", autorange="reversed"),
                 dragmode="pan",
@@ -66,9 +81,16 @@ class Profiles:
             # --------------- Salinity profile -------------------
             fig_sal_prof = go.Figure()
             for i, sal_profile in enumerate(salinity_profiles):
-                fig_sal_prof.add_trace(go.Scatter(x=sal_profile, y=self.depths[depth_idx], mode='markers', 
-                                                  hovertemplate='Sal: %{x:.1f} PSU, Depth %{y} m<extra></extra>',
-                                                  name=f'{loc_names[i]}', marker=dict(color=self.styles.colors[i])))  # Use self.depths and self.colors
+                base_color = self.styles.colors[i]
+                fig_sal_prof.add_trace(go.Scatter(
+                    x=sal_profile,
+                    y=self.depths[depth_idx],
+                    mode='lines+markers',
+                    hovertemplate='Sal: %{x:.1f} PSU, Depth %{y} m<extra></extra>',
+                    name=f'{loc_names[i]}',
+                    marker=dict(color=base_color),
+                    line=dict(color=hex_to_rgba(base_color, 0.75), width=1)
+                ))
 
             if main_depth_idx > 0:
                 min_sal = np.min([np.min(sal) for sal in salinity_profiles])
@@ -96,7 +118,7 @@ class Profiles:
                 )
 
             fig_sal_prof.update_layout(
-                title=f"Salinity Profiles",
+                title=f"Synthetic S Profiles",
                 xaxis=dict(title="Salinity (PSU)"),
                 yaxis=dict(title="Depth (m)", autorange="reversed"),
                 dragmode="pan",

@@ -112,9 +112,9 @@ class NespresoStyles:
                                 dcc.Dropdown(
                                     id='sat_field_selector',
                                     options=[
-                                        {'label': 'AVISO', 'value': 'AVISO'},
-                                        {'label': 'SST', 'value': 'SST'},
-                                        {'label': 'SSS', 'value': 'SSS'},
+                                        {'label': 'CMEMS ADT', 'value': 'AVISO'},
+                                        {'label': 'OISST SST', 'value': 'SST'},
+                                        {'label': 'SMAP SSS', 'value': 'SSS'},
                                     ],
                                     value='AVISO',
                                     clearable=False
@@ -144,9 +144,10 @@ class NespresoStyles:
                                 ),
                                 width=12
                             ),
-                        ])
+                        ], style={'display': 'none'})
                         ], xl=2, lg=3, md=4),
-                    dbc.Col(dcc.Graph(id='fig_aviso', figure=self.def_figure, config=self.def_config), xl=10, lg=9, md=8),
+                    dbc.Col(dcc.Graph(id='fig_aviso', figure=self.def_figure, config=self.def_config), xl=3, lg=4, md=6),
+                    dbc.Col([], xl=7, lg=5, md=2),
                     dcc.Store(id='prof_loc', data=[]),
                     dcc.Store(id='cur_date', data=0),
                     dcc.Store(id='cur_date_str', data=selected_date_str),
@@ -161,27 +162,22 @@ class NespresoStyles:
                 ]),
                 # ------------------- Line separator  -------------------
                 dbc.Row([
-                dbc.Col(html.Hr(), style={'borderTop': '1px solid #ccc', 'margin': '20px 0'},xl=2, lg=1, md=0),  
-                dbc.Col(html.H1("NeSPReSO synthetics", id='nespreso-predictions', style={'textAlign': 'center'}), xl=8, lg=10, md=11),
-                dbc.Col(html.Hr(), style={'borderTop': '1px solid #ccc', 'margin': '20px 0'},xl=2, lg=1, md=0),  
+                    dbc.Col(html.H1("NeSPReSO synthetics", id='nespreso-predictions', style={'textAlign': 'center'}), width=12)
                 ]),
                 # ------------------- Depth slider row (below title) -------------------
                 dbc.Row([
-                    dbc.Col([], xl=2, lg=3, md=4),
-                    dbc.Col([
-                        html.Div("Display depth:", className="text-right font-weight-bold"),
-                        dcc.Slider(
-                            id='depth_idx',
-                            min=0,
-                            max=1800,
-                            step=10,
-                            value=0,
-                            marks={0: '0', 500: '500', 1000: '1000', 1800: '1800'},
-                            tooltip={"placement": "bottom", "always_visible": True},
-                            className='small-slider'
-                        )
-                    ], xl=8, lg=9, md=8, sm=12),
-                    dbc.Col([], xl=2, lg=0, md=0),
+                    dbc.Col(html.Div("Display depth:", className="text-right font-weight-bold"), xl=2, lg=3, md=4),
+                    dbc.Col(dcc.Slider(
+                        id='depth_idx',
+                        min=0,
+                        max=1800,
+                        step=10,
+                        value=0,
+                        marks={0: '0', 500: '500', 1000: '1000', 1800: '1800'},
+                        tooltip={"placement": "bottom", "always_visible": True},
+                        className='small-slider'
+                    ), xl=3, lg=4, md=6),
+                    dbc.Col([], xl=7, lg=5, md=2),
                 ]),
                 # ------------------- NeSPReSO maps (match satellite sizes) -------------------
                 dbc.Row([
@@ -241,7 +237,7 @@ class NespresoStyles:
                     dbc.Col(
                         html.Div(id='profile_controls', children=[
                             html.Div(
-                                ["Use 'Pan and add profile' ", html.I(className='bi bi-arrows-move'), " then click to see T and S profiles at locations."],
+                                ["Click any map to add profile points, then view T and S profiles at locations."],
                                 id='instructions_profile',
                                 style={'padding':'6px','fontStyle':'italic'}
                             ),
