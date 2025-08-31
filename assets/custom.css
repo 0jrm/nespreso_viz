@@ -19,7 +19,7 @@ html,body{
 }
 
 /* Section headings */
-#nespreso-date, #nespreso-predictions{
+#nespreso-date, #nespreso-predictions, #custom-request{
   font-weight:700;
   color:var(--text-color);
 }

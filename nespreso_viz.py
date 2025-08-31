@@ -1,4 +1,5 @@
 #!/bin/env python3
+#!/bin/env python3
 # /etc/httpd/conf/ozavala_custom_wsgi.conf
 import dash
 from dash import Input, Output, State, html, dcc
@@ -18,11 +19,14 @@ import re
 from functools import lru_cache
 import base64
 import io
+import requests
+from flask import request as flask_request, Response
 
 # %% Make a basic dash interface to explore a NetCDF file
 
 ### Load available NetCDF files and default to the latest date
 file_path = "/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO"
+API_UPSTREAM_URL = os.environ.get('NESPRESO_UPSTREAM_URL', 'http://127.0.0.1:5000/v1/profile')
 
 date_regex = re.compile(r"nespreso_grid_(\d{4}-\d{2}-\d{2})\.nc$")
 
@@ -101,6 +105,32 @@ transect_loc = [[24, -90], [24, -92]]
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP])
 server = app.server
 app.config.suppress_callback_exceptions = True
+
+# Optional same-origin proxy for /v1/profile -> upstream API
+@server.route('/v1/profile', methods=['POST'])
+def proxy_profile():
+    try:
+        upstream_resp = requests.post(
+            API_UPSTREAM_URL,
+            json=flask_request.get_json(silent=True),
+            headers={'Content-Type': 'application/json'},
+            timeout=600,
+        )
+        excluded_headers = {'content-encoding', 'content-length', 'transfer-encoding', 'connection'}
+        headers = [(name, value) for (name, value) in upstream_resp.headers.items() if name.lower() not in excluded_headers]
+        return Response(upstream_resp.content, upstream_resp.status_code, headers)
+    except Exception as exc:
+        return Response(str(exc), status=502)
+
+@app.callback(
+    Output('custom_status', 'children'),
+    Input('btn-custom-download', 'n_clicks'),
+    prevent_initial_call=True,
+)
+def set_processing_status(n_clicks):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    return "Processing..."
 
 # Create layout with three rows and specified figures
 app.layout = styles_obj.default_layout()
@@ -554,6 +584,103 @@ def download_file(n_clicks, cur_date_str):
         filename=filename,
         type='application/octet-stream'
     )
+
+
+# =================== Custom query download (POST to API) ===================
+@app.callback(
+    Output('download-custom', 'data'),
+    Output('custom_status', 'children', allow_duplicate=True),
+    Input('btn-custom-download', 'n_clicks'),
+    State('custom_coords', 'value'),
+    State('cur_date_str', 'data'),
+    prevent_initial_call=True,
+)
+def download_custom_profiles(n_clicks, coord_text, cur_date_str):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    if not coord_text:
+        raise dash.exceptions.PreventUpdate
+
+    # Parse coordinates from textarea (lat, lon per line)
+    lat_list = []
+    lon_list = []
+    for raw_line in coord_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        # Accept comma or whitespace separated
+        parts = [p for p in re.split(r"[,\s]+", line) if p]
+        if len(parts) < 2:
+            continue
+        try:
+            lat_val = float(parts[0])
+            lon_val = float(parts[1])
+        except Exception:
+            continue
+        if not (-90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0):
+            continue
+        lat_list.append(lat_val)
+        lon_list.append(lon_val)
+
+    if not lat_list:
+        raise dash.exceptions.PreventUpdate
+
+    # Build per-point dates; allow optional third token per line
+    date_values = []
+    for idx, raw_line in enumerate([l for l in coord_text.splitlines() if l.strip()]):
+        parts = [p for p in re.split(r"[,\s]+", raw_line.strip()) if p]
+        if len(parts) >= 3 and re.fullmatch(r"\d{4}-\d{2}-\d{2}", parts[2]):
+            date_values.append(parts[2])
+        else:
+            date_values.append(cur_date_str)
+
+    payload = {
+        "lat": lat_list,
+        "lon": lon_list,
+        "date": date_values,
+    }
+
+    # Build same-origin API URL: [scheme://host]/v1/profile
+    try:
+        base_url = flask_request.host_url.rstrip('/')
+        api_url = f"{base_url}/v1/profile"
+    except Exception:
+        api_url = "/v1/profile"
+
+    # Indicate processing; status will update once the request completes
+    try:
+        resp = requests.post(api_url, json=payload, timeout=600)
+    except Exception as exc:
+        print(f"Custom query request failed: {exc}")
+        return dash.no_update, "Request failed"
+
+    if resp.status_code != 200:
+        print(f"Custom query API error: status={resp.status_code}, text={resp.text[:200]}")
+        return dash.no_update, "Request failed"
+
+    content = resp.content
+    # Derive filename per requested format
+    def fmt_coord(lat, lon):
+        lat_s = ("%.4f" % lat).rstrip('0').rstrip('.')
+        lon_s = ("%.4f" % lon).rstrip('0').rstrip('.')
+        return f"({lat_s},{lon_s})"
+    first_coord = fmt_coord(lat_list[0], lon_list[0])
+    suffix_many = "-_" if len(lat_list) > 3 else ""
+    last_coord = fmt_coord(lat_list[-1], lon_list[-1]) if len(lat_list) > 1 else ""
+    parts = ["NeSPReSO_", cur_date_str, "_", first_coord, "_", suffix_many]
+    if last_coord:
+        parts.append(last_coord)
+    parts.append(".nc")
+    default_name = "".join(parts)
+    cd = resp.headers.get('Content-Disposition', '')
+    filename = default_name
+    if 'filename=' in cd:
+        try:
+            filename = cd.split('filename=')[-1].strip('"')
+        except Exception:
+            filename = default_name
+
+    return dcc.send_bytes(content, filename=filename, type='application/octet-stream'), "Done!"
 
 
 if __name__ == '__main__':

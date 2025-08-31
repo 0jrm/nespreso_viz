@@ -128,7 +128,7 @@ class NespresoStyles:
                                 dbc.Row([
                                     dbc.Col(
                                         html.Div([
-                                            html.Span("NeSPReSO (Neural Synthetic Profiles from Remote Sensing and Observations)", className="citation-text", style={'fontSize': '30px'}),
+                                            html.Span("NeSPReSO (Neural Synthetic Profiles from Remote Sensing and Observations)", className="citation-text", style={'fontSize': '34px'}),
                                             html.Br(),
                                             html.Span([
                                                 "Miranda et al., 2025, Ocean Modelling. ",
@@ -280,7 +280,7 @@ class NespresoStyles:
                                     ),
                                 ], align='center', className='mb-2'),
                                 dbc.Row([
-                                    dbc.Col(html.Div("Display depth:", className="font-weight-bold"), width="auto"),
+                                    dbc.Col(html.Div("Depth to display on maps:", className="font-weight-bold"), width="auto"),
                                     dbc.Col(dcc.Slider(
                                         id='depth_idx',
                                         min=0,
@@ -290,8 +290,10 @@ class NespresoStyles:
                                         marks={0: '0', 500: '500', 1000: '1000', 1800: '1800'},
                                         tooltip={"placement": "bottom", "always_visible": True},
                                         className='small-slider'
-                                    ), width=6),
-                                    dbc.Col(dcc.Dropdown(
+                                    ), width=6)
+                                ], align='center'),
+                                dbc.Row([
+                                    dbc.Col(html.Div("Depths to display on transects and profiles:", className="font-weight-bold"), width="auto"),                                    dbc.Col(dcc.Dropdown(
                                         id='depth_selection',
                                         options=[
                                             {'label': 'First 100 m', 'value': 'upto100'},
@@ -305,19 +307,20 @@ class NespresoStyles:
                                         value='upto500',
                                         clearable=False
                                     ), width=4),
-                                ], align='center')
-                            ]),
+                                ], align='center'),
+                                ]),
                             className='control-bar'
                         ), width=12
                     )
                 ]),
 
-                # ------------------- Download component -------------------
+                # ------------------- Download components -------------------
                 dcc.Download(id="download-dataframe-csv"),
+                dcc.Download(id="download-custom"),
 
                 # ------------------- Section heading -------------------
                 dbc.Row([
-                    dbc.Col(html.H1(f"Satellite data for {selected_date_str}", id='nespreso-date'), style={'textAlign': 'center'})
+                    dbc.Col(html.H1(f"Satellite data for {selected_date_str}", id='nespreso-date', style={'textAlign': 'center', 'fontSize': '24px'}))
                 ]),
 
                 # ------------------- Top figure (primary) -------------------
@@ -340,7 +343,7 @@ class NespresoStyles:
 
                 # ------------------- NeSPReSO heading -------------------
                 dbc.Row([
-                    dbc.Col(html.H1("NeSPReSO synthetics", id='nespreso-predictions', style={'textAlign': 'center'}), width=12)
+                    dbc.Col(html.H1("NeSPReSO synthetics", id='nespreso-predictions', style={'textAlign': 'center', 'fontSize': '24px'}), width=12)
                 ]),
 
                 # ------------------- NeSPReSO maps -------------------
@@ -391,7 +394,73 @@ class NespresoStyles:
                 ]),
 
                 # ------------------- Additional metrics (removed MLD) -------------------
-                dbc.Row([]),
+                dbc.Row([dbc.Col(html.Div(style={'height': '21px'}))]),
+
+                # ------------------- Custom Query (Profiles) -------------------
+                dbc.Row([
+                    dbc.Col(html.H1(f"Custom request - Current date: {selected_date_str}", id='custom-request', style={'textAlign': 'center', 'fontSize': '24px'}), width=12)
+                ], className='mb-2'),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Textarea(
+                            id='custom_coords',
+                            placeholder='lat, lon',
+                            rows=4,
+                            style={"minWidth":"320px", "width":"100%"}
+                        ),
+                        html.Div([
+                            dbc.Button(
+                                "Send request and download",
+                                id="btn-custom-download",
+                                color="secondary",
+                                className="btn-modern",
+                                style={"minWidth":"220px"}
+                            ),
+                            html.Span(id='custom_status', children='', style={"marginLeft": "12px"})
+                        ], style={"marginTop": "8px"})
+                    ], xl=6, lg=6, md=8),
+                    dbc.Col(
+                        html.Div([
+                            html.Div("Enter one profile coordinate per line as: lat, lon, YYYY-MM-DD (optional, uses currently selected date if not provided)", style={'fontStyle': 'italic', 'fontSize': '12px'}),
+                            html.Div("Examples:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
+                            html.Div("25.10347, -83.0", style={'fontSize': '12px'}),
+                            html.Div("25, -83, 2016-12-31", style={'fontSize': '12px'}),
+                            html.Div("26.5123 -80.2 2017-01-05 (on land / no satellite data available, will be missing in the output)", style={'fontSize': '12px'}),
+                            html.Div("24.1, -82.7 (uses currently selected date, since no date is provided)", style={'fontSize': '12px'}),
+                            html.Div("Disclaimer: NeSPReSO was trained/evaluated over the mapped Argo region above; requests outside this area may fail or be inaccurate.", style={'fontStyle': 'italic', 'fontSize': '11px', 'color':'#6c757d'}),
+                            html.Div("Requests for dates different from the selected date are subject to satellite data availability.", style={'fontSize': '11px', 'color':'#6c757d'}),
+                            html.Div("Points on land or with no satellite data available will be ignored.", style={'fontStyle': 'italic', 'fontSize': '11px', 'color':'#6c757d'})
+                        ]),
+                        xl=6, lg=6, md=4
+                    )
+                ], align='start', className='mb-2'),
+
+                # ------------------- Footer credits -------------------
+                dbc.Row([
+                    dbc.Col([
+                        html.Div([
+                            html.Span("Based on "),
+                            html.A(
+                                "NcDashboard",
+                                href="https://github.com/olmozavala/ncdashboard",
+                                target="_blank",
+                                style={'fontWeight':'bold'},
+                                rel="noopener noreferrer"
+                            ),
+                            html.Span(": Software For Exploratory Analysis And Visualization for Earth Sciences, by Olmo Zavala-Romero. "),
+                            html.A(
+                                "github.com/olmozavala/ncdashboard",
+                                href="https://github.com/olmozavala/ncdashboard",
+                                target="_blank",
+                                rel="noopener noreferrer"
+                            ),
+                        ], style={'textAlign': 'center', 'fontSize': '12px', 'color': '#6c757d', 'padding': '8px 0'}),
+                        html.Div([
+                            html.Span("Got feedback, suggestions, or requests? "),
+                            html.A("Contact me at jrm22n@fsu.edu", href="mailto:jrm22n@fsu.edu", style={'fontWeight':'bold'})
+                        ], style={'textAlign': 'center', 'fontSize': '12px', 'color': '#6c757d', 'padding': '0 0 12px 0'})
+                    ], width=12)
+                ], className='mt-3 mb-4'),
 
             ])
 

@@ -425,7 +425,7 @@ class MainFigures:
             np.round(self.temp[date_idx,depth_idx,:,:], 2),
             prof_locations,
             cm.thermal,
-            f"Synthetic T, {depth_idx} m",
+            f"Synthetic T @ {depth_idx} m",
             'Lat: %{y}<br>Lon: %{x}<br>Temp: %{z:.2f} °C<extra></extra>',
             'Temperature [°C]'
         )
@@ -434,7 +434,7 @@ class MainFigures:
             self.sal[date_idx,depth_idx,:,:],
             prof_locations,
             cm.haline,
-            f"Synthetic S, {depth_idx} m",
+            f"Synthetic S @ {depth_idx} m",
             'Lat: %{y}<br>Lon: %{x}<br>Salt: %{z:.2f} PSU<extra></extra>',
             'Salinity [PSU]'
         )
