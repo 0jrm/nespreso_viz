@@ -543,6 +543,18 @@ def update_title(cur_date_str):
         label = cur_date_str
     return f"Satellite fields for {label}"
 
+@app.callback(
+    Output('custom-request', 'children'),
+    Input('cur_date_str', 'data'),
+)
+def update_custom_request_title(cur_date_str):
+    try:
+        dt = datetime.strptime(cur_date_str, '%Y-%m-%d')
+        label = dt.strftime("%b %d, %Y")
+    except Exception:
+        label = cur_date_str
+    return f"Custom request - Current date: {label}"
+
 # =================== Download functionality ===================
 @app.callback(
     Output('btn-download', 'children'),

@@ -35,7 +35,7 @@ class NespresoStyles:
     fig_height = 300
     margins = dict(
         l=0,  # left margin
-        r=36,  # tighter right margin; colorbar sits closer
+        r=56,  # increased right margin to keep colorbar within card on small screens
         b=0,  # bottom margin
         t=36,  # increased top margin to avoid title clipping
         pad=0  # padding
@@ -119,7 +119,7 @@ class NespresoStyles:
         # Precompute default values
         latest = max(self.days).astype('datetime64[D]').astype(str)
         use_dmc = (dmc is not None) and (os.environ.get('USE_DMC_CAL', '0') == '1')
-        layout = dbc.Container(fluid=True, style={'backgroundColor': '#f8f9fa'}, children=[
+        layout = dbc.Container(fluid=True, className='outer-container', style={'backgroundColor': '#f8f9fa'}, children=[
                 # ------------------- Citation bar -------------------
                 dbc.Row([
                     dbc.Col(
@@ -279,35 +279,6 @@ class NespresoStyles:
                                         width="auto", style={'display': 'none'}
                                     ),
                                 ], align='center', className='mb-2'),
-                                dbc.Row([
-                                    dbc.Col(html.Div("Depth to display on maps:", className="font-weight-bold"), width="auto"),
-                                    dbc.Col(dcc.Slider(
-                                        id='depth_idx',
-                                        min=0,
-                                        max=1800,
-                                        step=10,
-                                        value=0,
-                                        marks={0: '0', 500: '500', 1000: '1000', 1800: '1800'},
-                                        tooltip={"placement": "bottom", "always_visible": True},
-                                        className='small-slider'
-                                    ), width=6)
-                                ], align='center'),
-                                dbc.Row([
-                                    dbc.Col(html.Div("Depths to display on transects and profiles:", className="font-weight-bold"), width="auto"),                                    dbc.Col(dcc.Dropdown(
-                                        id='depth_selection',
-                                        options=[
-                                            {'label': 'First 100 m', 'value': 'upto100'},
-                                            {'label': 'First 200 m', 'value': 'upto200'},
-                                            {'label': 'First 300 m', 'value': 'upto300'},
-                                            {'label': 'First 500 m', 'value': 'upto500'},
-                                            {'label': '(all) Every 10 m', 'value': 'every10'},
-                                            {'label': '(all) Every 5 m', 'value': 'every05'},
-                                            {'label': '(all) Every 1 m', 'value': 'every01'},
-                                        ],
-                                        value='upto500',
-                                        clearable=False
-                                    ), width=4),
-                                ], align='center'),
                                 ]),
                             className='control-bar'
                         ), width=12
@@ -339,18 +310,46 @@ class NespresoStyles:
                 dbc.Row([
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_SST',  figure=self.def_figure, config=self.def_config)], style={'backgroundColor':'#f2f4f8'}), className='viz-card', style={'backgroundColor':'#f2f4f8','border':'none'}),   xl=6, lg=6, md=6),
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_SSS',  figure=self.def_figure, config=self.def_config)], style={'backgroundColor':'#f2f4f8'}), className='viz-card', style={'backgroundColor':'#f2f4f8','border':'none'}),   xl=6, lg=6, md=6),
-                ]),
+                ], className='plot-row'),
+
+                # ------------------- Spacing before NeSPReSO heading -------------------
+                dbc.Row([dbc.Col(html.Div(style={'height': '30px'}))]),
 
                 # ------------------- NeSPReSO heading -------------------
                 dbc.Row([
                     dbc.Col(html.H1("NeSPReSO synthetics", id='nespreso-predictions', style={'textAlign': 'center', 'fontSize': '24px'}), width=12)
                 ]),
 
+                # ------------------- Depth slider below title -------------------
+                dbc.Row([dbc.Col(html.Div(style={'height': '20px'}))]),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card(
+                            dbc.CardBody([
+                                dbc.Row([
+                                    dbc.Col(html.Div("Depth to display on maps:", className="font-weight-bold"), width="auto"),
+                                    dbc.Col(dcc.Slider(
+                                        id='depth_idx',
+                                        min=0,
+                                        max=1800,
+                                        step=10,
+                                        value=0,
+                                        marks={0: '0', 500: '500', 1000: '1000', 1800: '1800'},
+                                        tooltip={"placement": "bottom", "always_visible": True},
+                                        className='small-slider'
+                                    ), width=8)
+                                ], align='center'),
+                            ])
+                        )
+                    ], width=12)
+                ], className='mb-3'),
+                dbc.Row([dbc.Col(html.Div(style={'height': '20px'}))]),
+
                 # ------------------- NeSPReSO maps -------------------
                 dbc.Row([
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_temp', figure=self.def_figure, config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f2f4f8'}), className='viz-card', style={'backgroundColor':'#f2f4f8', 'border':'none'}), xl=6, lg=6, md=6),
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_sal',  figure=self.def_figure, config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f2f4f8'}), className='viz-card', style={'backgroundColor':'#f2f4f8', 'border':'none'}), xl=6, lg=6, md=6),
-                ]),
+                ], className='plot-row'),
 
                 # ------------------- Transect controls and plots -------------------
                 dbc.Row([
@@ -370,7 +369,36 @@ class NespresoStyles:
                 dbc.Row([
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_temp_trans', figure=self.def_figure, config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}), className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}), xl=6, lg=6, md=6),
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_sal_trans',  figure=self.def_figure, config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}), className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}), xl=6, lg=6, md=6),
-                ]),
+                ], className='plot-row'),
+
+                # ------------------- Depth selection between transects and profiles -------------------
+                dbc.Row([dbc.Col(html.Div(style={'height': '25px'}))]),
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Card(
+                            dbc.CardBody([
+                                dbc.Row([
+                                    dbc.Col(html.Div("Depths to display on transects and profiles:", className="font-weight-bold"), width="auto"),
+                                    dbc.Col(dcc.Dropdown(
+                                        id='depth_selection',
+                                        options=[
+                                            {'label': 'First 100 m', 'value': 'upto100'},
+                                            {'label': 'First 200 m', 'value': 'upto200'},
+                                            {'label': 'First 300 m', 'value': 'upto300'},
+                                            {'label': 'First 500 m', 'value': 'upto500'},
+                                            {'label': '(all) Every 10 m', 'value': 'every10'},
+                                            {'label': '(all) Every 5 m', 'value': 'every05'},
+                                            {'label': '(all) Every 1 m', 'value': 'every01'},
+                                        ],
+                                        value='upto500',
+                                        clearable=False
+                                    ), width=6),
+                                ], align='center'),
+                            ])
+                        )
+                    ], width=12)
+                ], className='mb-3'),
+                dbc.Row([dbc.Col(html.Div(style={'height': '25px'}))]),
 
                 # ------------------- Profile controls and plots -------------------
                 dbc.Row([
@@ -391,7 +419,7 @@ class NespresoStyles:
                 dbc.Row([
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_temp_prof', figure=self.def_figure,config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}),  className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}),  xl=6, lg=6, md=6),
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_sal_prof',  figure=self.def_figure,config=self.prof_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}),    className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}),  xl=6, lg=6, md=6),
-                ]),
+                ], className='plot-row'),
 
                 # ------------------- Additional metrics (removed MLD) -------------------
                 dbc.Row([dbc.Col(html.Div(style={'height': '21px'}))]),
@@ -404,9 +432,9 @@ class NespresoStyles:
                     dbc.Col([
                         dbc.Textarea(
                             id='custom_coords',
-                            placeholder='lat, lon',
-                            rows=4,
-                            style={"minWidth":"320px", "width":"100%"}
+                            placeholder='lat (required), lon (required), YYYY-MM-DD (optional)',
+                            rows=6,
+                            style={"minWidth":"250px", "width":"100%"}
                         ),
                         html.Div([
                             dbc.Button(
@@ -447,7 +475,7 @@ class NespresoStyles:
                                 style={'fontWeight':'bold'},
                                 rel="noopener noreferrer"
                             ),
-                            html.Span(": Software For Exploratory Analysis And Visualization for Earth Sciences, by Olmo Zavala-Romero. "),
+                            html.Span(": An Open-SourceSoftware for Exploratory Analysis And Visualization for Earth Sciences Datasets, by Olmo Zavala-Romero. Available at "),
                             html.A(
                                 "github.com/olmozavala/ncdashboard",
                                 href="https://github.com/olmozavala/ncdashboard",

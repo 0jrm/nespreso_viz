@@ -41,7 +41,7 @@ html,body{
   border-radius:var(--radius);
   box-shadow:var(--shadow-sm);
 }
-.viz-card .card-body{ background-color:var(--bg-card) !important; padding:6px 0 6px 0; overflow:visible; }
+.viz-card .card-body{ background-color:var(--bg-card) !important; padding:6px 0 6px 0; overflow:hidden; }
 
 /* Slightly darker containers for dense-gradient panels (transects, profiles) */
 .viz-card.viz-dense{ background-color:var(--bg-dense) !important; }
@@ -77,3 +77,14 @@ html,body{
 /* Slider tweaks */
 .small-slider .rc-slider{transform:none}
 .small-slider .rc-slider-mark-text{font-size:1.1em}
+
+/* Responsive outer margins (5% on each side) */
+.outer-container{
+  padding-left:5%;
+  padding-right:5%;
+}
+
+/* 5% horizontal spacing between plots in two-col rows */
+.plot-row{
+  --bs-gutter-x:5%;
+}

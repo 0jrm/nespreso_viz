@@ -114,6 +114,7 @@ class MainFigures:
                     tickfont=dict(size=self.styles.font_sizes['tick']),
                     range=[self.bbox['lon_min'], self.bbox['lon_max']],
                     constrain='domain',
+                    automargin=True,
                     gridcolor='rgba(0,0,0,0.05)',
                     zeroline=False,
                     linecolor='rgba(0,0,0,0.15)'
@@ -123,6 +124,7 @@ class MainFigures:
                     tickfont=dict(size=self.styles.font_sizes['tick']),
                     range=[self.bbox['lat_min'], self.bbox['lat_max']],
                     scaleanchor='x', scaleratio=1, constrain='domain',
+                    automargin=True,
                     gridcolor='rgba(0,0,0,0.05)',
                     zeroline=False,
                     linecolor='rgba(0,0,0,0.15)'
