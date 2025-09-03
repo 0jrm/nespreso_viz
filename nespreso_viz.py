@@ -27,6 +27,7 @@ from flask import request as flask_request, Response
 ### Load available NetCDF files and default to the latest date
 file_path = "/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO"
 API_UPSTREAM_URL = os.environ.get('NESPRESO_UPSTREAM_URL', 'http://127.0.0.1:5000/v1/profile')
+API_GRID_UPSTREAM_URL = os.environ.get('NESPRESO_GRID_UPSTREAM_URL', 'http://127.0.0.1:5000/v1/profile/grid')
 
 date_regex = re.compile(r"nespreso_grid_(\d{4}-\d{2}-\d{2})\.nc$")
 
@@ -115,6 +116,21 @@ def proxy_profile():
             json=flask_request.get_json(silent=True),
             headers={'Content-Type': 'application/json'},
             timeout=600,
+        )
+        excluded_headers = {'content-encoding', 'content-length', 'transfer-encoding', 'connection'}
+        headers = [(name, value) for (name, value) in upstream_resp.headers.items() if name.lower() not in excluded_headers]
+        return Response(upstream_resp.content, upstream_resp.status_code, headers)
+    except Exception as exc:
+        return Response(str(exc), status=502)
+
+@server.route('/v1/profile/grid', methods=['POST'])
+def proxy_grid():
+    try:
+        upstream_resp = requests.post(
+            API_GRID_UPSTREAM_URL,
+            json=flask_request.get_json(silent=True),
+            headers={'Content-Type': 'application/json'},
+            timeout=1800,
         )
         excluded_headers = {'content-encoding', 'content-length', 'transfer-encoding', 'connection'}
         headers = [(name, value) for (name, value) in upstream_resp.headers.items() if name.lower() not in excluded_headers]
@@ -571,6 +587,20 @@ def update_download_button_text(cur_date_str):
         return "Download NeSPReSO data"
 
 @app.callback(
+    Output('custom_examples_profile', 'style'),
+    Output('custom_examples_grid', 'style'),
+    Input('custom_mode', 'value'),
+)
+def toggle_custom_mode(mode):
+    is_profile = (mode != 'grid')
+    style_show = {}
+    style_hide = {'display': 'none'}
+    return (
+        (style_show if is_profile else style_hide),
+        (style_hide if is_profile else style_show),
+    )
+
+@app.callback(
     Output('download-dataframe-csv', 'data'),
     Input('btn-download', 'n_clicks'),
     State('cur_date_str', 'data'),
@@ -603,75 +633,147 @@ def download_file(n_clicks, cur_date_str):
     Output('download-custom', 'data'),
     Output('custom_status', 'children', allow_duplicate=True),
     Input('btn-custom-download', 'n_clicks'),
+    State('custom_mode', 'value'),
     State('custom_coords', 'value'),
     State('cur_date_str', 'data'),
     prevent_initial_call=True,
 )
-def download_custom_profiles(n_clicks, coord_text, cur_date_str):
+def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
+
+    # Base URL for same-origin proxy
+    try:
+        base_url = flask_request.host_url.rstrip('/')
+    except Exception:
+        base_url = ""
+
+    if mode == 'grid':
+        payload = {"date": cur_date_str}
+        # Parse from single textarea: support positional "YYYY-MM-DD [bbox] res"
+        # and named keys date=..., bbox=..., resolution=/res=...
+        if coord_text:
+            text = coord_text.strip()
+            # Try positional first: date [bbox] res
+            # date
+            mdate_pos = re.search(r"(\d{4}-\d{2}-\d{2})", text)
+            if mdate_pos:
+                payload["date"] = mdate_pos.group(1)
+            # bbox in brackets
+            mbbox = re.search(r"\[([^\]]+)\]", text)
+            if mbbox:
+                try:
+                    nums = [float(x) for x in re.split(r"[,\s]+", mbbox.group(1).strip()) if x]
+                    if len(nums) >= 4:
+                        payload["bbox"] = [nums[0], nums[1], nums[2], nums[3]]
+                except Exception:
+                    pass
+            # resolution as last number not part of bbox
+            # remove bracket content for resolution scan
+            text_no_bbox = re.sub(r"\[[^\]]*\]", " ", text)
+            mres_pos = re.findall(r"([0-9]*\.?[0-9]+)", text_no_bbox)
+            if mres_pos:
+                try:
+                    # pick the last numeric token as resolution if any
+                    payload["resolution"] = float(mres_pos[-1])
+                except Exception:
+                    pass
+            # Fallback/override with named keys if present
+            m = re.search(r"date\s*=\s*(\d{4}-\d{2}-\d{2})", text)
+            if m:
+                payload["date"] = m.group(1)
+            mres = re.search(r"(?:resolution|res)\s*=\s*([0-9]*\.?[0-9]+)", text, re.IGNORECASE)
+            if mres:
+                try:
+                    payload["resolution"] = float(mres.group(1))
+                except Exception:
+                    pass
+            mb = re.search(r"bbox\s*=\s*([^\n]+)", text, re.IGNORECASE)
+            if mb and "bbox" not in payload:
+                raw = mb.group(1)
+                try:
+                    nums = [float(x) for x in re.split(r"[,\s]+", raw.strip()) if x]
+                    if len(nums) >= 4:
+                        payload["bbox"] = [nums[0], nums[1], nums[2], nums[3]]
+                except Exception:
+                    pass
+
+        api_url = f"{base_url}/v1/profile/grid" if base_url else "/v1/profile/grid"
+        try:
+            resp = requests.post(api_url, json=payload, timeout=1800)
+        except Exception as exc:
+            print(f"Custom grid request failed: {exc}")
+            return dash.no_update, "Request failed"
+        if resp.status_code != 200:
+            print(f"Custom grid API error: status={resp.status_code}, text={resp.text[:200]}")
+            return dash.no_update, "Request failed"
+
+        parts = [f"NeSPReSO_grid_{cur_date_str}"]
+        if "bbox" in payload:
+            b = payload["bbox"]
+            parts.append(f"_bbox_{b[0]:.2f}_{b[1]:.2f}_{b[2]:.2f}_{b[3]:.2f}")
+        if "resolution" in payload:
+            parts.append(f"_res_{float(payload['resolution']):.3f}")
+        default_name = "".join(parts) + ".nc"
+        cd = resp.headers.get('Content-Disposition', '')
+        filename = default_name
+        if 'filename=' in cd:
+            try:
+                filename = cd.split('filename=')[-1].strip('"')
+            except Exception:
+                filename = default_name
+        return dcc.send_bytes(resp.content, filename=filename, type='application/octet-stream'), "Done!"
+
+    # Profile mode
     if not coord_text:
         raise dash.exceptions.PreventUpdate
-
-    # Parse coordinates from textarea (lat, lon per line)
     lat_list = []
     lon_list = []
+    header_date = None
+    # Optional header date=YYYY-MM-DD
+    header_match = re.search(r"^\s*date\s*=\s*(\d{4}-\d{2}-\d{2})\s*$", coord_text, flags=re.IGNORECASE | re.MULTILINE)
+    if header_match:
+        header_date = header_match.group(1)
     for raw_line in coord_text.splitlines():
         line = raw_line.strip()
         if not line:
             continue
-        # Accept comma or whitespace separated
+        # Skip header lines like date=...
+        if re.match(r"^date\s*=\s*\d{4}-\d{2}-\d{2}$", line, flags=re.IGNORECASE):
+            continue
         parts = [p for p in re.split(r"[,\s]+", line) if p]
         if len(parts) < 2:
             continue
         try:
-            lat_val = float(parts[0])
-            lon_val = float(parts[1])
+            lat_val = float(parts[0]); lon_val = float(parts[1])
         except Exception:
             continue
         if not (-90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0):
             continue
-        lat_list.append(lat_val)
-        lon_list.append(lon_val)
-
+        lat_list.append(lat_val); lon_list.append(lon_val)
     if not lat_list:
         raise dash.exceptions.PreventUpdate
-
-    # Build per-point dates; allow optional third token per line
     date_values = []
-    for idx, raw_line in enumerate([l for l in coord_text.splitlines() if l.strip()]):
-        parts = [p for p in re.split(r"[,\s]+", raw_line.strip()) if p]
+    for raw_line in [l for l in coord_text.splitlines() if l.strip()]:
+        line = raw_line.strip()
+        if re.match(r"^date\s*=\s*\d{4}-\d{2}-\d{2}$", line, flags=re.IGNORECASE):
+            continue
+        parts = [p for p in re.split(r"[,\s]+", line) if p]
         if len(parts) >= 3 and re.fullmatch(r"\d{4}-\d{2}-\d{2}", parts[2]):
             date_values.append(parts[2])
         else:
-            date_values.append(cur_date_str)
-
-    payload = {
-        "lat": lat_list,
-        "lon": lon_list,
-        "date": date_values,
-    }
-
-    # Build same-origin API URL: [scheme://host]/v1/profile
-    try:
-        base_url = flask_request.host_url.rstrip('/')
-        api_url = f"{base_url}/v1/profile"
-    except Exception:
-        api_url = "/v1/profile"
-
-    # Indicate processing; status will update once the request completes
+            date_values.append(header_date or cur_date_str)
+    payload = {"lat": lat_list, "lon": lon_list, "date": date_values}
+    api_url = f"{base_url}/v1/profile" if base_url else "/v1/profile"
     try:
         resp = requests.post(api_url, json=payload, timeout=600)
     except Exception as exc:
-        print(f"Custom query request failed: {exc}")
+        print(f"Custom profile request failed: {exc}")
         return dash.no_update, "Request failed"
-
     if resp.status_code != 200:
-        print(f"Custom query API error: status={resp.status_code}, text={resp.text[:200]}")
+        print(f"Custom profile API error: status={resp.status_code}, text={resp.text[:200]}")
         return dash.no_update, "Request failed"
 
-    content = resp.content
-    # Derive filename per requested format
     def fmt_coord(lat, lon):
         lat_s = ("%.4f" % lat).rstrip('0').rstrip('.')
         lon_s = ("%.4f" % lon).rstrip('0').rstrip('.')
@@ -691,8 +793,7 @@ def download_custom_profiles(n_clicks, coord_text, cur_date_str):
             filename = cd.split('filename=')[-1].strip('"')
         except Exception:
             filename = default_name
-
-    return dcc.send_bytes(content, filename=filename, type='application/octet-stream'), "Done!"
+    return dcc.send_bytes(resp.content, filename=filename, type='application/octet-stream'), "Done!"
 
 
 if __name__ == '__main__':

@@ -424,18 +424,33 @@ class NespresoStyles:
                 # ------------------- Additional metrics (removed MLD) -------------------
                 dbc.Row([dbc.Col(html.Div(style={'height': '21px'}))]),
 
-                # ------------------- Custom Query (Profiles) -------------------
+                # ------------------- Custom Query (Profiles/Grid) -------------------
                 dbc.Row([
                     dbc.Col(html.H1(f"Custom request - Current date: {selected_date_str}", id='custom-request', style={'textAlign': 'center', 'fontSize': '24px'}), width=12)
                 ], className='mb-2'),
                 dbc.Row([
                     dbc.Col([
-                        dbc.Textarea(
-                            id='custom_coords',
-                            placeholder='lat (required), lon (required), YYYY-MM-DD (optional)',
-                            rows=6,
-                            style={"minWidth":"250px", "width":"100%"}
-                        ),
+                        dbc.Row([
+                            dbc.Col(
+                                dbc.RadioItems(
+                                    id='custom_mode',
+                                    options=[
+                                        {'label': 'Profiles', 'value': 'profile'},
+                                        {'label': 'Grid', 'value': 'grid'},
+                                    ],
+                                    value='profile',
+                                    inline=True
+                                ), width=12
+                            )
+                        ], className='mb-2'),
+                        html.Div(id='custom_profile_form', children=[
+                            dbc.Textarea(
+                                id='custom_coords',
+                                placeholder='Profiles: Lat, Lon, Date (YYYY-MM-DD) per line. Optional header: date=YYYY-MM-DD applies to all lines. Grid: Date [lon_min, lat_min, lon_max, lat_max] resolution. Keys date=/bbox=/res= also supported.',
+                                rows=6,
+                                style={"minWidth":"250px", "width":"100%"}
+                            ),
+                        ]),
                         html.Div([
                             dbc.Button(
                                 "Send request and download",
@@ -449,19 +464,33 @@ class NespresoStyles:
                     ], xl=6, lg=6, md=8),
                     dbc.Col(
                         html.Div([
-                            html.Div("Enter one profile coordinate per line as: lat, lon, YYYY-MM-DD (optional, uses currently selected date if not provided)", style={'fontStyle': 'italic', 'fontSize': '12px'}),
-                            html.Div("Examples:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
-                            html.Div("25.10347, -83.0", style={'fontSize': '12px'}),
-                            html.Div("25, -83, 2016-12-31", style={'fontSize': '12px'}),
-                            html.Div("26.5123 -80.2 2017-01-05 (on land / no satellite data available, will be missing in the output)", style={'fontSize': '12px'}),
-                            html.Div("24.1, -82.7 (uses currently selected date, since no date is provided)", style={'fontSize': '12px'}),
-                            html.Div("Disclaimer: NeSPReSO was trained/evaluated over the mapped Argo region above; requests outside this area may fail or be inaccurate.", style={'fontStyle': 'italic', 'fontSize': '11px', 'color':'#6c757d'}),
-                            html.Div("Requests for dates different from the selected date are subject to satellite data availability.", style={'fontSize': '11px', 'color':'#6c757d'}),
-                            html.Div("Points on land or with no satellite data available will be ignored.", style={'fontStyle': 'italic', 'fontSize': '11px', 'color':'#6c757d'})
+                            html.Div(id='custom_examples_profile', children=[
+                                html.Div("'Profiles' mode will generate profiles at specified coordinates and times. Useful for time series or reproducing observations.", style={'fontStyle': 'italic', 'fontSize': '12px'}),
+                                html.Div("Examples:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
+                                html.Div("date=2020-01-01", style={'fontSize': '12px'}),
+                                html.Div("Lat=-23.5, Long=-46.6", style={'fontSize': '12px'}),
+                                html.Div("Lat=-23.5, Long=-46.6, Date=2020-01-15", style={'fontSize': '12px'}),
+                                html.Div("24.1, -82.7 (uses header or selected date if no date given)", style={'fontSize': '12px'}),
+                            ]),
+                            html.Div(id='custom_examples_grid', children=[
+                                html.Div("'Grid' mode creates a regular mesh within the trained domain. Default resolution is 0.25°, but can be set finer (e.g., 0.05) or coarser. Region limits can also be specified.", style={'fontStyle': 'italic', 'fontSize': '12px'}),
+                                html.Div("Format:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
+                                html.Div("YYYY-MM-DD [lon_min, lat_min, lon_max, lat_max] resolution #OR", style={'fontSize': '12px'}),
+                                html.Div("date=YYYY-MM-DD bbox=[lon_min, lat_min, lon_max, lat_max] res=resolution", style={'fontSize': '12px'}),
+                                html.Div("Examples:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
+                                html.Div("2020-01-01", style={'fontSize': '12px'}),
+                                html.Div("2020-01-01 [-95, 18, -80, 31] 0.05", style={'fontSize': '12px'}),
+                                # html.Div("(Also accepts date=..., bbox=..., res=...)", style={'fontSize': '12px'}),
+                                html.Div("date=2020-01-01 bbox=[-95 18 -80 31] res=0.5 ", style={'fontSize': '12px'}),
+                            ], style={'display':'none'}),
+                            html.Div("Disclaimer: NeSPReSO was trained/evaluated over the mapped Argo region; requests outside may fail or be inaccurate.", style={'fontStyle': 'italic', 'fontSize': '11px', 'color':'#6c757d'}),
+                            html.Div("Dates different from the selected date depend on satellite availability.", style={'fontSize': '11px', 'color':'#6c757d'}),
+                            html.Div("Points on land or without satellite data will be ignored.", style={'fontStyle': 'italic', 'fontSize': '11px', 'color':'#6c757d'})
                         ]),
                         xl=6, lg=6, md=4
                     )
                 ], align='start', className='mb-2'),
+
 
                 # ------------------- Footer credits -------------------
                 dbc.Row([
