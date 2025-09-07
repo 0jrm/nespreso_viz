@@ -110,6 +110,7 @@ app = dash.Dash(__name__,
                 # routes_pathname_prefix: prefix for API routes on Flask server
                 routes_pathname_prefix='/nespreso_viz/')
 server = app.server
+app.title = "NeSPReSO Dashboard"
 app.config.suppress_callback_exceptions = True
 
 # Same-origin proxy routes that forward to external NeSPReSO APIs
