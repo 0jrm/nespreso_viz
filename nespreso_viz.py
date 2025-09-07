@@ -26,8 +26,8 @@ from flask import request as flask_request, Response
 
 ### Load available NetCDF files and default to the latest date
 file_path = "/Net/work/ozavala/DATA/SubSurfaceFields/NeSPReSO"
-API_UPSTREAM_URL = os.environ.get('NESPRESO_UPSTREAM_URL', 'http://127.0.0.1:5000/v1/profile')
-API_GRID_UPSTREAM_URL = os.environ.get('NESPRESO_GRID_UPSTREAM_URL', 'http://127.0.0.1:5000/v1/profile/grid')
+API_UPSTREAM_URL = os.environ.get('NESPRESO_UPSTREAM_URL', 'https://ozavala.coaps.fsu.edu/nespreso_profile')
+API_GRID_UPSTREAM_URL = os.environ.get('NESPRESO_GRID_UPSTREAM_URL', 'https://ozavala.coaps.fsu.edu/nespreso_grid')
 
 date_regex = re.compile(r"nespreso_grid_(\d{4}-\d{2}-\d{2})\.nc$")
 
@@ -103,7 +103,12 @@ currently_drawn_line_id = None
 transect_loc = [[24, -90], [24, -92]]
 
 # Create Dash app (simplify base path for local debugging)
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP])
+app = dash.Dash(__name__, 
+                external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.BOOTSTRAP],         
+                # requests_pathname_prefix: prefix for AJAX calls from browser
+                requests_pathname_prefix='/nespreso_viz/',
+                # routes_pathname_prefix: prefix for API routes on Flask server
+                routes_pathname_prefix='/nespreso_viz/')
 server = app.server
 app.config.suppress_callback_exceptions = True
 
@@ -798,7 +803,7 @@ def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
 
 if __name__ == '__main__':
     # Debug mode
-   app.run(debug=False)
+   app.run(debug=True, host='146.201.220.16', port=8050)
 
     # Production mode at ip 144.174.7.151
     # app.run_server(debug=False, host='144.174.7.151', port=8050)

@@ -5,6 +5,7 @@ import xarray as xr
 from viz_utils.styles import NespresoStyles
 import os
 import json
+from datetime import datetime
 try:
     import cartopy.feature as cfeature
     from cartopy.io import shapereader as shpreader
@@ -348,11 +349,19 @@ class MainFigures:
                     )
 
         # -------------------------- AVISO -------------------------------
+        adt_title = "CMEMS ADT"
+        try:
+            if isinstance(cur_date_str, str) and len(cur_date_str) == 10:
+                dt = datetime.strptime(cur_date_str, '%Y-%m-%d')
+                if dt >= datetime(2024, 11, 1):
+                    adt_title += " (derived from SSH)"
+        except Exception:
+            pass
         fig_aviso = self.make_figure(
             self.aviso[date_idx, :, :],
             prof_locations,
             cm.curl,
-            f"CMEMS ADT",
+            adt_title,
             'Lat: %{y}<br>Lon: %{x}<br>ADT: %{z:.2f} m<extra></extra>',
             'ADT [m]'
         )
