@@ -665,7 +665,7 @@ def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
         # and named keys date=..., bbox=..., resolution=/res=...
         if coord_text:
             text = coord_text.strip()
-            # Try positional first: date [bbox] res
+            # Accept patterns: "date [bbox] res" or named keys (date=, bbox=, res=)
             # date
             mdate_pos = re.search(r"(\d{4}-\d{2}-\d{2})", text)
             if mdate_pos:
@@ -679,18 +679,8 @@ def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
                         payload["bbox"] = [nums[0], nums[1], nums[2], nums[3]]
                 except Exception:
                     pass
-            # resolution as last number not part of bbox
-            # remove bracket content for resolution scan
-            text_no_bbox = re.sub(r"\[[^\]]*\]", " ", text)
-            mres_pos = re.findall(r"([0-9]*\.?[0-9]+)", text_no_bbox)
-            if mres_pos:
-                try:
-                    # pick the last numeric token as resolution if any
-                    payload["resolution"] = float(mres_pos[-1])
-                except Exception:
-                    pass
-            # Fallback/override with named keys if present
-            m = re.search(r"date\s*=\s*(\d{4}-\d{2}-\d{2})", text)
+            # Named keys override
+            m = re.search(r"date\s*=\s*(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE)
             if m:
                 payload["date"] = m.group(1)
             mres = re.search(r"(?:resolution|res)\s*=\s*([0-9]*\.?[0-9]+)", text, re.IGNORECASE)
@@ -708,6 +698,50 @@ def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
                         payload["bbox"] = [nums[0], nums[1], nums[2], nums[3]]
                 except Exception:
                     pass
+
+            # Guard: if user pasted lat/lon-like input without bbox, reject
+            # Remove bracketed bbox and date to examine remaining numeric tokens
+            text_no_bbox = re.sub(r"\[[^\]]*\]", " ", text)
+            text_no_bbox_date = re.sub(r"\d{4}-\d{2}-\d{2}", " ", text_no_bbox)
+            num_tokens = re.findall(r"[-+]?\d*\.?\d+", text_no_bbox_date)
+            has_latlon_words = re.search(r"\b(lat|lon|long)\b", text, re.IGNORECASE) is not None
+            has_named_res = re.search(r"(?:resolution|res)\s*=", text, re.IGNORECASE) is not None
+            if mbbox is None and (has_latlon_words or (len(num_tokens) >= 2 and not has_named_res)):
+                return dash.no_update, (
+                    "Grid mode expects 'YYYY-MM-DD [lon_min, lat_min, lon_max, lat_max] res' or "
+                    "named keys (date=, bbox=, res=). Detected coordinate-like input; "
+                    "use Profiles mode or wrap bbox in brackets."
+                )
+
+        # Validate inputs before calling API
+        # Validate date
+        try:
+            datetime.strptime(payload.get("date", ""), "%Y-%m-%d")
+        except Exception:
+            return dash.no_update, "Invalid date. Use YYYY-MM-DD."
+
+        # Validate bbox if present
+        if "bbox" in payload:
+            b = payload["bbox"]
+            try:
+                if not (isinstance(b, (list, tuple)) and len(b) == 4):
+                    return dash.no_update, "Invalid bbox. Use [lon_min, lat_min, lon_max, lat_max]."
+                lon_min, lat_min, lon_max, lat_max = [float(x) for x in b]
+            except Exception:
+                return dash.no_update, "Invalid bbox values. Must be numeric [lon_min, lat_min, lon_max, lat_max]."
+            if not (-180.0 <= lon_min <= 180.0 and -180.0 <= lon_max <= 180.0 and -90.0 <= lat_min <= 90.0 and -90.0 <= lat_max <= 90.0):
+                return dash.no_update, "BBOX out of range. Lon in [-180,180], Lat in [-90,90]."
+            if not (lon_min < lon_max and lat_min < lat_max):
+                return dash.no_update, "BBOX order invalid. Require lon_min < lon_max and lat_min < lat_max."
+
+        # Validate resolution if present
+        if "resolution" in payload:
+            try:
+                res = float(payload["resolution"])
+            except Exception:
+                return dash.no_update, "Resolution must be a positive number (degrees)."
+            if not (res > 0):
+                return dash.no_update, "Resolution must be > 0 (degrees)."
 
         # Use upstream grid API directly to avoid self-calls that can deadlock single workers
         api_url = API_GRID_UPSTREAM_URL
@@ -802,6 +836,13 @@ def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
 
     if not lat_list:
         return dash.no_update, "No valid coordinates found. Use 'lat, lon [date]' or 'lat=.. lon=.. [date=..]'."
+
+    # Validate dates format
+    for dval in date_values:
+        try:
+            datetime.strptime(dval, '%Y-%m-%d')
+        except Exception:
+            return dash.no_update, f"Invalid date '{dval}'. Use YYYY-MM-DD."
 
     payload = {"lat": lat_list, "lon": lon_list, "date": date_values}
     # Use upstream profile API directly to avoid self-calls that can deadlock single workers

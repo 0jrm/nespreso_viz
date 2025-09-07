@@ -446,7 +446,7 @@ class NespresoStyles:
                         html.Div(id='custom_profile_form', children=[
                             dbc.Textarea(
                                 id='custom_coords',
-                                placeholder='Profiles: Lat, Lon, Date (YYYY-MM-DD) per line. Optional header: date=YYYY-MM-DD applies to all lines. Grid: Date [lon_min, lat_min, lon_max, lat_max] resolution. Keys date=/bbox=/res= also supported.',
+                                placeholder='#Profiles mode: lat (dd.ddd), lon (-dd.ddd), date (YYYY-MM-DD) per line. Optional header: date=YYYY-MM-DD applies to all lines. #Grid mode: Date [lon_min, lat_min, lon_max, lat_max] resolution. Keys date=/bbox=/res= also supported.',
                                 rows=6,
                                 style={"minWidth":"250px", "width":"100%"}
                             ),
@@ -467,8 +467,9 @@ class NespresoStyles:
                             html.Div(id='custom_examples_profile', children=[
                                 html.Div("'Profiles' mode will generate profiles at specified coordinates and times. Useful for time series or reproducing observations.", style={'fontStyle': 'italic', 'fontSize': '12px'}),
                                 html.Div("Format:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
-                                html.Div("date-YYYY-MM-DD (optional header, applies date to all lines)", style={'fontSize': '12px'}),
-                                html.Div("lat (DD.DDD), lon (DD.DDD), date (YYYY-MM-DD) (optional)", style={'fontSize': '12px'}),
+                                html.Div("date=YYYY-MM-DD (optional header, applies date to all lines)", style={'fontSize': '12px'}),
+                                html.Div("lat (dd.ddd), lon (-dd.ddd), date (YYYY-MM-DD) (optional)", style={'fontSize': '12px'}),
+                                html.Div("lat=dd.ddd, lon=-dd.ddd, date=YYYY-MM-DD (optional)", style={'fontSize': '12px'}),
                                 html.Div("Examples:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
                                 html.Div("24.1, -87.2 (uses header or selected date if no date given)", style={'fontSize': '12px'}),
                                 html.Div("23.5, 93.6", style={'fontSize': '12px'}),
