@@ -466,15 +466,18 @@ class NespresoStyles:
                         html.Div([
                             html.Div(id='custom_examples_profile', children=[
                                 html.Div("'Profiles' mode will generate profiles at specified coordinates and times. Useful for time series or reproducing observations.", style={'fontStyle': 'italic', 'fontSize': '12px'}),
+                                html.Div("Format:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
+                                html.Div("date-YYYY-MM-DD (optional header, applies date to all lines)", style={'fontSize': '12px'}),
+                                html.Div("lat (DD.DDD), lon (DD.DDD), date (YYYY-MM-DD) (optional)", style={'fontSize': '12px'}),
                                 html.Div("Examples:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
-                                html.Div("24.1, -82.7 (uses header or selected date if no date given)", style={'fontSize': '12px'}),
-                                html.Div("Lat=-23.5, Long=-46.6", style={'fontSize': '12px'}),
-                                html.Div("Lat=-23.5, Long=-46.6, Date=2020-01-15", style={'fontSize': '12px'}),
+                                html.Div("24.1, -87.2 (uses header or selected date if no date given)", style={'fontSize': '12px'}),
+                                html.Div("23.5, 93.6", style={'fontSize': '12px'}),
+                                html.Div("24.9, 95.1, 2020-01-15 (forces date)", style={'fontSize': '12px'}),
                             ]),
                             html.Div(id='custom_examples_grid', children=[
                                 html.Div("'Grid' mode creates a regular mesh within the trained domain. Default resolution is 0.25°, but can be set finer (e.g., 0.05) or coarser. Region limits can also be specified.", style={'fontStyle': 'italic', 'fontSize': '12px'}),
                                 html.Div("Format:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
-                                html.Div("YYYY-MM-DD [lon_min, lat_min, lon_max, lat_max] resolution #OR", style={'fontSize': '12px'}),
+                                html.Div("YYYY-MM-DD [lon_min, lat_min, lon_max, lat_max] resolution (D.D, optional) #OR", style={'fontSize': '12px'}),
                                 html.Div("date=YYYY-MM-DD bbox=[lon_min, lat_min, lon_max, lat_max] res=resolution", style={'fontSize': '12px'}),
                                 html.Div("Examples:", style={'fontWeight': 'bold', 'fontSize': '12px', 'marginTop':'4px'}),
                                 html.Div("2020-01-01", style={'fontSize': '12px'}),

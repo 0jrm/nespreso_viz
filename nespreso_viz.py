@@ -112,8 +112,11 @@ app = dash.Dash(__name__,
 server = app.server
 app.config.suppress_callback_exceptions = True
 
-# Optional same-origin proxy for /v1/profile -> upstream API
-@server.route('/v1/profile', methods=['POST'])
+# Same-origin proxy routes that forward to external NeSPReSO APIs
+@server.route('/nespreso_profile', methods=['POST'])
+@server.route('/nespreso_viz/nespreso_profile', methods=['POST'])
+@server.route('/v1_profile', methods=['POST'])
+@server.route('/nespreso_viz/v1_profile', methods=['POST'])
 def proxy_profile():
     try:
         upstream_resp = requests.post(
@@ -128,7 +131,10 @@ def proxy_profile():
     except Exception as exc:
         return Response(str(exc), status=502)
 
-@server.route('/v1/profile/grid', methods=['POST'])
+@server.route('/nespreso_grid', methods=['POST'])
+@server.route('/nespreso_viz/nespreso_grid', methods=['POST'])
+@server.route('/v1_profile/grid', methods=['POST'])
+@server.route('/nespreso_viz/v1_profile/grid', methods=['POST'])
 def proxy_grid():
     try:
         upstream_resp = requests.post(
@@ -703,15 +709,17 @@ def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
                 except Exception:
                     pass
 
-        api_url = f"{base_url}/v1/profile/grid" if base_url else "/v1/profile/grid"
+        # Use upstream grid API directly to avoid self-calls that can deadlock single workers
+        api_url = API_GRID_UPSTREAM_URL
         try:
             resp = requests.post(api_url, json=payload, timeout=1800)
         except Exception as exc:
             print(f"Custom grid request failed: {exc}")
-            return dash.no_update, "Request failed"
+            return dash.no_update, f"Request failed: {exc}"
         if resp.status_code != 200:
             print(f"Custom grid API error: status={resp.status_code}, text={resp.text[:200]}")
-            return dash.no_update, "Request failed"
+            msg = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+            return dash.no_update, f"Request failed: {msg}"
 
         parts = [f"NeSPReSO_grid_{cur_date_str}"]
         if "bbox" in payload:
@@ -731,53 +739,82 @@ def download_custom_profiles(n_clicks, mode, coord_text, cur_date_str):
 
     # Profile mode
     if not coord_text:
-        raise dash.exceptions.PreventUpdate
-    lat_list = []
-    lon_list = []
+        return dash.no_update, "Please enter coordinates."
+
+    # Optional header date=YYYY-MM-DD (applies to all lines without an explicit date)
     header_date = None
-    # Optional header date=YYYY-MM-DD
     header_match = re.search(r"^\s*date\s*=\s*(\d{4}-\d{2}-\d{2})\s*$", coord_text, flags=re.IGNORECASE | re.MULTILINE)
     if header_match:
         header_date = header_match.group(1)
+
+    lat_list = []
+    lon_list = []
+    date_values = []
+
     for raw_line in coord_text.splitlines():
         line = raw_line.strip()
         if not line:
             continue
-        # Skip header lines like date=...
-        if re.match(r"^date\s*=\s*\d{4}-\d{2}-\d{2}$", line, flags=re.IGNORECASE):
+        # Skip pure header lines like "date=YYYY-MM-DD"
+        if re.match(r"^date\s*=\s*\d{4}-\d{2}-\d{2}\s*$", line, flags=re.IGNORECASE):
             continue
-        parts = [p for p in re.split(r"[,\s]+", line) if p]
-        if len(parts) < 2:
-            continue
-        try:
-            lat_val = float(parts[0]); lon_val = float(parts[1])
-        except Exception:
+
+        lat_val = None
+        lon_val = None
+        date_val = None
+
+        # Accept named fields in any order: lat=.. lon=/long=.. [date=..]
+        mlat = re.search(r"\b(lat)\s*=\s*([+-]?\d+(?:\.\d+)?)", line, flags=re.IGNORECASE)
+        mlon = re.search(r"\b(lon|long)\s*=\s*([+-]?\d+(?:\.\d+)?)", line, flags=re.IGNORECASE)
+        mdate = re.search(r"\bdate\s*=\s*(\d{4}-\d{2}-\d{2})", line, flags=re.IGNORECASE)
+        if mlat and mlon:
+            try:
+                lat_val = float(mlat.group(2))
+                lon_val = float(mlon.group(2))
+                if mdate:
+                    date_val = mdate.group(1)
+            except Exception:
+                lat_val = None
+                lon_val = None
+
+        # Fallback: positional format "lat lon [date]", accepting comma or whitespace separators
+        if lat_val is None or lon_val is None:
+            parts = [p for p in re.split(r"[,\s]+", line) if p]
+            if len(parts) >= 2:
+                try:
+                    lat_val = float(parts[0])
+                    lon_val = float(parts[1])
+                    if len(parts) >= 3 and re.fullmatch(r"\d{4}-\d{2}-\d{2}", parts[2]):
+                        date_val = parts[2]
+                except Exception:
+                    lat_val = None
+                    lon_val = None
+
+        # Validate and collect
+        if lat_val is None or lon_val is None:
             continue
         if not (-90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0):
             continue
-        lat_list.append(lat_val); lon_list.append(lon_val)
+
+        lat_list.append(lat_val)
+        lon_list.append(lon_val)
+        date_values.append(date_val or header_date or cur_date_str)
+
     if not lat_list:
-        raise dash.exceptions.PreventUpdate
-    date_values = []
-    for raw_line in [l for l in coord_text.splitlines() if l.strip()]:
-        line = raw_line.strip()
-        if re.match(r"^date\s*=\s*\d{4}-\d{2}-\d{2}$", line, flags=re.IGNORECASE):
-            continue
-        parts = [p for p in re.split(r"[,\s]+", line) if p]
-        if len(parts) >= 3 and re.fullmatch(r"\d{4}-\d{2}-\d{2}", parts[2]):
-            date_values.append(parts[2])
-        else:
-            date_values.append(header_date or cur_date_str)
+        return dash.no_update, "No valid coordinates found. Use 'lat, lon [date]' or 'lat=.. lon=.. [date=..]'."
+
     payload = {"lat": lat_list, "lon": lon_list, "date": date_values}
-    api_url = f"{base_url}/v1/profile" if base_url else "/v1/profile"
+    # Use upstream profile API directly to avoid self-calls that can deadlock single workers
+    api_url = API_UPSTREAM_URL
     try:
         resp = requests.post(api_url, json=payload, timeout=600)
     except Exception as exc:
         print(f"Custom profile request failed: {exc}")
-        return dash.no_update, "Request failed"
+        return dash.no_update, f"Request failed: {exc}"
     if resp.status_code != 200:
         print(f"Custom profile API error: status={resp.status_code}, text={resp.text[:200]}")
-        return dash.no_update, "Request failed"
+        msg = resp.text[:200] if resp.text else f"HTTP {resp.status_code}"
+        return dash.no_update, f"Request failed: {msg}"
 
     def fmt_coord(lat, lon):
         lat_s = ("%.4f" % lat).rstrip('0').rstrip('.')
