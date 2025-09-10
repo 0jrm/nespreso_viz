@@ -14,6 +14,7 @@ from viz_utils.styles import NespresoStyles
 from viz_utils.update_trans import Transects
 from viz_utils.update_main import MainFigures
 from datetime import datetime
+import calendar
 import os
 import re
 from functools import lru_cache
@@ -222,7 +223,14 @@ def change_calendar_month_year(month_value, year_value, current_date):
         cur_day = int(current_date.split('-')[2]) if current_date else 1
     except Exception:
         cur_day = 1
-    new_date_str = f"{int(year_value):04d}-{int(month_value):02d}-{min(cur_day, 28):02d}"
+    try:
+        year_int = int(year_value)
+        month_int = int(month_value)
+        last_day = calendar.monthrange(year_int, month_int)[1]
+        day_int = min(cur_day, last_day)
+    except Exception:
+        day_int = min(cur_day, 28)
+    new_date_str = f"{int(year_value):04d}-{int(month_value):02d}-{int(day_int):02d}"
     try:
         if new_date_str not in DATE_TO_FILE:
             month_prefix = new_date_str[:7]
@@ -479,6 +487,22 @@ def toggle_transect_instructions(trans_lines):
     has_line = bool(trans_lines)
     return ({'padding':'6px','fontStyle':'italic','display': 'none'} if has_line else {'padding':'6px','fontStyle':'italic'}), \
            ({} if has_line else {'display':'none'})
+# =================== Hide/show plot rows based on selections ===================
+@app.callback(
+    Output('profiles_row', 'style'),
+    Input('prof_loc', 'data'),
+)
+def toggle_profiles_row(prof_loc):
+    has_points = bool(prof_loc)
+    return ({} if has_points else {'display': 'none'})
+
+@app.callback(
+    Output('transects_row', 'style'),
+    Input('trans_lines', 'data'),
+)
+def toggle_transects_row(trans_lines):
+    has_line = bool(trans_lines)
+    return ({} if has_line else {'display': 'none'})
 
 ## ================================ Profiles figures ====================================
 @app.callback(

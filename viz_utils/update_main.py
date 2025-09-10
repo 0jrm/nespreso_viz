@@ -111,7 +111,7 @@ class MainFigures:
             layout=go.Layout(
                 title=dict(text=title, font=dict(family=self.styles.font_family, size=self.styles.font_sizes['title']), y=0.98),
                 xaxis=dict(
-                    title=dict(text="Longitude", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['axis_title'])),
+                    title=dict(text=""),
                     tickfont=dict(size=self.styles.font_sizes['tick']),
                     range=[self.bbox['lon_min'], self.bbox['lon_max']],
                     constrain='domain',
@@ -121,7 +121,7 @@ class MainFigures:
                     linecolor='rgba(0,0,0,0.15)'
                 ),
                 yaxis=dict(
-                    title=dict(text="Latitude", font=dict(family=self.styles.font_family, size=self.styles.font_sizes['axis_title'])),
+                    title=dict(text=""),
                     tickfont=dict(size=self.styles.font_sizes['tick']),
                     range=[self.bbox['lat_min'], self.bbox['lat_max']],
                     scaleanchor='x', scaleratio=1, constrain='domain',

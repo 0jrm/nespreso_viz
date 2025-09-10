@@ -369,7 +369,7 @@ class NespresoStyles:
                 dbc.Row([
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_temp_trans', figure=self.def_figure, config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}), className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}), xl=6, lg=6, md=6),
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_sal_trans',  figure=self.def_figure, config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}), className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}), xl=6, lg=6, md=6),
-                ], className='plot-row'),
+                ], className='plot-row', id='transects_row', style={'display':'none'}),
 
                 # ------------------- Depth selection between transects and profiles -------------------
                 dbc.Row([dbc.Col(html.Div(style={'height': '25px'}))]),
@@ -419,7 +419,7 @@ class NespresoStyles:
                 dbc.Row([
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_temp_prof', figure=self.def_figure,config=self.trans_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}),  className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}),  xl=6, lg=6, md=6),
                     dbc.Col(dbc.Card(dbc.CardBody([dcc.Graph(id='fig_sal_prof',  figure=self.def_figure,config=self.prof_config), html.Div("Generated with NeSPReSO (Miranda et al. 2025)", className='viz-footer')], style={'backgroundColor':'#f1f3f5'}),    className='viz-card viz-dense', style={'backgroundColor':'#f1f3f5', 'border':'none'}),  xl=6, lg=6, md=6),
-                ], className='plot-row'),
+                ], className='plot-row', id='profiles_row', style={'display':'none'}),
 
                 # ------------------- Additional metrics (removed MLD) -------------------
                 dbc.Row([dbc.Col(html.Div(style={'height': '21px'}))]),
