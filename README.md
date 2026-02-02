@@ -28,7 +28,7 @@ A comprehensive web-based visualization dashboard for exploring NeSPReSO (Nested
 
 4. **Run the application**
    ```bash
-   python nespreso_viz.py
+   ./start_viz.sh
    ```
 
 5. **Access the dashboard**
