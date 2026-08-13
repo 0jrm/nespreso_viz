@@ -180,7 +180,7 @@ class MainFigures:
                     geoms = extract_lines(inter)
                     for line in geoms:
                         xs, ys = line.xy
-                        traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                        traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
             except Exception:
                 pass
 
@@ -200,7 +200,7 @@ class MainFigures:
                         geoms = extract_lines(inter)
                         for line in geoms:
                             xs, ys = line.xy
-                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                            traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                 except Exception:
                     pass
 
@@ -222,7 +222,7 @@ class MainFigures:
                             continue
                         for line in extract_lines(boundary):
                             xs, ys = line.xy
-                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                            traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                 except Exception:
                     pass
 
@@ -243,7 +243,7 @@ class MainFigures:
                                 continue
                             for line in extract_lines(boundary):
                                 xs, ys = line.xy
-                                traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                                traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                     except Exception:
                         pass
 
@@ -259,7 +259,7 @@ class MainFigures:
                             continue
                         for line in extract_lines(inter):
                             xs, ys = line.xy
-                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                            traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                 except Exception:
                     pass
 
@@ -308,10 +308,10 @@ class MainFigures:
                         else:
                             # break segments at bbox boundaries for visual clarity
                             if xs:
-                                traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                                traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                                 xs, ys = [], []
                     if xs:
-                        traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                        traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                 elif gtype == 'MultiLineString':
                     for line in coords:
                         xs = []
@@ -322,10 +322,10 @@ class MainFigures:
                                 ys.append(y)
                             else:
                                 if xs:
-                                    traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                                    traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                                     xs, ys = [], []
                         if xs:
-                            traces.append(go.Scattergl(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
+                            traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color="black", width=1), hoverinfo="skip", showlegend=False))
                 else:
                     continue
 
